@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { Node } from '@/lib/supabase';
 import { LogOut, Music, Clock } from 'lucide-react';
 
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [userNodes, setUserNodes] = useState([]);
+  const [userNodes, setUserNodes] = useState<Node[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

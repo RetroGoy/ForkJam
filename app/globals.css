@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 85.7% 97.3%;
+    --secondary: 120 56.5% 21.8%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 209 100% 50%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0rem;
+  }
+
+  .dark {
+    --background: 225 9% 9%;
+    --foreground: 60 9.1% 97.8%;
+    --card: 24 9.8% 10%;
+    --card-foreground: 60 9.1% 97.8%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 60 9.1% 97.8%;
+    --primary: 60 54% 50%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 120 56.5% 21.8%;
+    --secondary-foreground: 60 9.1% 97.8%;
+    --muted: 12 6.5% 15.1%;
+    --muted-foreground: 24 5.4% 63.9%;
+    --accent: 209 100% 50%;
+    --accent-foreground: 60 9.1% 97.8%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 12 6.5% 15.1%;
+    --input: 12 6.5% 15.1%;
+    --ring: 24 5.7% 82.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.retro-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 215, 0, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 215, 0, 0.1) 1px, transparent 1px);
+  animation: gridPulse 4s infinite;
+}
+
+.retro-button {
+  @apply bg-yellow-900/30 hover:bg-yellow-800/50 text-yellow-500 border border-yellow-700/50 
+         transition-all duration-200 uppercase tracking-wider font-medium;
+}
+
+.retro-card {
+  @apply bg-gray-900/80 border border-yellow-900/30 backdrop-blur-sm rounded-none;
+}
+
+.retro-input {
+  @apply bg-gray-900 border-2 border-yellow-900/50 text-yellow-500 
+         focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+         placeholder-yellow-900/50 rounded-none;
+}
+
+@keyframes gridPulse {
+  0% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.3; }
+}

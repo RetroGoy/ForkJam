@@ -22,41 +22,42 @@ export const useTopicStore = create<TopicState>((set, get) => ({
   nodes: [],
   isLoading: false,
   error: null,
-  
-  
+
+  setTopics: (topics) => set({ topics }),
+
   fetchTopics: async () => {
     set({ isLoading: true, error: null });
     try {
       const topics = await getTopics();
       set({ topics, isLoading: false });
     } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Unknown error fetching topics', 
-        isLoading: false 
+      set({
+        error: error instanceof Error ? error.message : 'Unknown error fetching topics',
+        isLoading: false,
       });
     }
   },
-  
+
   fetchNodesByTopic: async (topicId) => {
     set({ isLoading: true, error: null });
     try {
       const nodes = await getNodesByTopic(topicId);
       set({ nodes, isLoading: false });
     } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Unknown error fetching nodes', 
-        isLoading: false 
+      set({
+        error: error instanceof Error ? error.message : 'Unknown error fetching nodes',
+        isLoading: false,
       });
     }
   },
-  
+
   setCurrentTopic: (topic) => {
     set({ currentTopic: topic });
     if (topic) {
       get().fetchNodesByTopic(topic.id);
     }
   },
-  
+
   addNode: (node) => {
     set((state) => ({
       nodes: [...state.nodes, node]

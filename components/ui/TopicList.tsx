@@ -39,6 +39,7 @@ export function TopicList({ topics }: TopicListProps) {
   const filteredTopics = topics.filter(topic =>
     topic.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  console.log("RECEIVED TOPICS:", topics);
 
   return (
     <div className="h-full flex flex-col bg-gray-900/50">

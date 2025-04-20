@@ -7,10 +7,11 @@ import { getTopics, supabase } from '@/lib/supabase';
 import { useTopicStore } from '@/store/useTopicStore';
 import { Save, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { Topic } from '@/lib/supabase';
 
 export default function NewTopicPage() {
   const router = useRouter();
-  const [topics, setTopics] = useState([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',

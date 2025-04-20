@@ -9,6 +9,7 @@ interface TopicState {
   nodes: Node[];
   isLoading: boolean;
   error: string | null;
+  setTopics: (topics: Topic[]) => void;
   fetchTopics: () => Promise<void>;
   fetchNodesByTopic: (topicId: string) => Promise<void>;
   setCurrentTopic: (topic: Topic | null) => void;
@@ -21,6 +22,7 @@ export const useTopicStore = create<TopicState>((set, get) => ({
   nodes: [],
   isLoading: false,
   error: null,
+  
   
   fetchTopics: async () => {
     set({ isLoading: true, error: null });

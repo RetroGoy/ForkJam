@@ -8,6 +8,7 @@ import { Topic, Node, getTopics, createNode, uploadAudio } from '@/lib/supabase'
 import { useTopicStore } from '@/store/useTopicStore';
 import { useAudioStore } from '@/store/useAudioStore';
 import { Plus, X, Music } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
 interface TopicContentProps {
@@ -41,6 +42,9 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
       });
     }
   }, []);
+  useEffect(() => {
+    console.log("TopicContent received:", topic, nodes);
+  }, []);  
   
   const handleNodeSelect = (node: Node) => {
     setSelectedNode(node);

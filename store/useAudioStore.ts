@@ -17,6 +17,8 @@ interface AudioState {
   playNode: (node: Node) => void;
   stopNode: (nodeId: string) => void;
   stopAllNodes: () => void;
+  playBranch: (branch: Node[]) => void;
+  setGain: (nodeId: string, gain: number) => void;
 }
 
 export const useAudioStore = create<AudioState>((set, get) => ({
@@ -35,26 +37,25 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   setRecordingData: (data) => set({ recordingData: data }),
   
   playNode: (node) => {
+    console.log("Trying to play:", node.audio_url);
+  
     const { playingNodes } = get();
-    
-    // Stop this node if it's already playing
+  
     if (playingNodes.has(node.id)) {
       get().stopNode(node.id);
     }
-    
-    // Create and play the audio
+  
     const audio = new Audio(node.audio_url);
     audio.addEventListener('ended', () => {
       playingNodes.delete(node.id);
       set({ playingNodes: new Map(playingNodes) });
     });
-    
+  
     audio.play().catch(err => console.error('Error playing audio:', err));
-    
-    // Add to playing nodes
+  
     playingNodes.set(node.id, audio);
     set({ playingNodes: new Map(playingNodes) });
-  },
+  },  
   
   stopNode: (nodeId) => {
     const { playingNodes } = get();
@@ -77,5 +78,27 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     });
     
     set({ playingNodes: new Map() });
-  }
+  },
+
+  playBranch: (branch: Node[]) => {
+    const newMap = new Map(get().playingNodes);
+  
+    branch.forEach(node => {
+      const audio = new Audio(node.audio_url);
+      audio.loop = true;
+      audio.volume = 1;
+      audio.play().catch(err => console.error('Error playing audio:', err));
+      newMap.set(node.id, audio);
+    });
+  
+    set({ playingNodes: newMap });
+  },
+  
+  setGain: (nodeId: string, gain: number) => {
+    const { playingNodes } = get();
+    const audio = playingNodes.get(nodeId);
+    if (audio) {
+      audio.volume = gain;
+    }
+  }  
 }));

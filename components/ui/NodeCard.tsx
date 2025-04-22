@@ -6,15 +6,17 @@ import { Node } from '@/lib/supabase';
 import { useAudioStore } from '@/store/useAudioStore';
 import { Waveform } from './Waveform';
 import { cn } from '@/lib/utils';
+import { getBranchFrom } from '@/lib/audioUtils';
 
 interface NodeCardProps {
   node: Node;
   isSelected?: boolean;
   onAddChild?: () => void;
+  allNodes: Node[]; 
 }
 
-export function NodeCard({ node, isSelected = false, onAddChild }: NodeCardProps) {
-  const { playNode, stopNode, playingNodes } = useAudioStore();
+export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: NodeCardProps) {
+  const { playBranch, stopAllNodes, playingNodes, playNode, stopNode } = useAudioStore();
   
   const isPlaying = playingNodes.has(node.id);
   
@@ -42,10 +44,14 @@ export function NodeCard({ node, isSelected = false, onAddChild }: NodeCardProps
                               : '#3b82f6'; // blue
   
   const handlePlayPause = () => {
+    console.log("Clicked");
+    console.log("Playing from:", node.audio_url);
     if (isPlaying) {
-      stopNode(node.id);
-    } else {
-      playNode(node);
+      stopAllNodes(); 
+    }
+    else {
+      const branch = getBranchFrom(allNodes, node.id);
+      playBranch(branch);
     }
   };
 
@@ -61,9 +67,6 @@ export function NodeCard({ node, isSelected = false, onAddChild }: NodeCardProps
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center">
           <h3 className="text-lg font-bold tracking-tight">{node.title}</h3>
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-black/20 text-xs">
-            {node.bpm} BPM
-          </span>
         </div>
         <div className="flex gap-1">
           <button

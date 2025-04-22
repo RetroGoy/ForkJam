@@ -32,7 +32,7 @@ export function NodeGraph({ nodes, onNodeSelect, onAddChild }: NodeGraphProps) {
   // Initialize node positions
   useEffect(() => {
     if (!nodes.length) return;
-    
+
     // Build tree structure
     const nodeMap = new Map<string, LayoutNode>();
     const childrenMap = new Map<string, string[]>();
@@ -202,7 +202,7 @@ export function NodeGraph({ nodes, onNodeSelect, onAddChild }: NodeGraphProps) {
               node={layoutNode.node} 
               isSelected={selectedNodeId === layoutNode.node.id}
               onAddChild={() => onAddChild(layoutNode.node)}
-            />
+              allNodes={nodes} />
           </div>
         ))}
       </div>

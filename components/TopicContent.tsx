@@ -30,7 +30,6 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
   const [parentNode, setParentNode] = useState<Node | null>(null);
   const [newNodeData, setNewNodeData] = useState({
     title: '',
-    bpm: 120,
     instrument: 'Synth',
   });
   
@@ -76,7 +75,6 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
       const newNode: Omit<Node, 'id' | 'created_at'> = {
         title: newNodeData.title || 'Untitled Node',
         audio_url: audioUrl,
-        bpm: newNodeData.bpm,
         instrument: newNodeData.instrument,
         topic_id: topic.id,
         parent_node_id: parentNode ? parentNode.id : null,
@@ -95,7 +93,6 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
       setParentNode(null);
       setNewNodeData({
         title: '',
-        bpm: 120,
         instrument: 'Synth',
       });
     } catch (error) {
@@ -158,19 +155,6 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        BPM
-                      </label>
-                      <input 
-                        type="number" 
-                        min="40" 
-                        max="240"
-                        value={newNodeData.bpm}
-                        onChange={(e) => setNewNodeData({...newNodeData, bpm: parseInt(e.target.value)})}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                      />
-                    </div>
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-1">

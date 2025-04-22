@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -11,23 +11,23 @@ export type User = {
   email: string;
 };
 
+export type Node = {
+  id: string;
+  title: string;
+  audio_url: string;
+  instrument: string;
+  created_at?: string;
+  user_id: string;
+  topic_id: string;
+  parent_node_id: string | null;
+};
+
 export type Topic = {
   id: string;
   title: string;
   description: string;
   created_at?: string;
-};
-
-export type Node = {
-  id: string;
-  title: string;
-  audio_url: string;
   bpm: number;
-  instrument: string;
-  topic_id: string;
-  parent_node_id: string | null;
-  user_id: string;
-  created_at?: string;
 };
 
 export async function getTopics(): Promise<Topic[]> {

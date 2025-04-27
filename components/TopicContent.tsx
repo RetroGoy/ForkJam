@@ -119,33 +119,39 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
     <div className="flex h-full">
       <div className="flex-1 overflow-hidden bg-gray-800 relative">
 
-        <Header />
+        <div className='z-10'>
+          <Header />
+        </div>
         <div className="flex">
-          <Sidebar topics={topics} />
-        <NodeGraph
-          nodes={nodes}
-          onNodeSelect={handleNodeSelect}
-          onAddChild={handleAddChildClick}
-          topic={topic}
-          user={currentUser}
-          refreshNodes={async () => {
-            const { data: refreshedNodes } = await supabase
-              .from('nodes')
-              .select('*')
-              .eq('topic_id', topic.id);
-            if (refreshedNodes) setNodes(refreshedNodes);
-          }} />
+          <div className='z-10'>
+            <Sidebar topics={topics} />
+          </div>
+          <div className='z-0'>
+            <NodeGraph
+              nodes={nodes}
+              onNodeSelect={handleNodeSelect}
+              onAddChild={handleAddChildClick}
+              topic={topic}
+              user={currentUser}
+              refreshNodes={async () => {
+                const { data: refreshedNodes } = await supabase
+                  .from('nodes')
+                  .select('*')
+                  .eq('topic_id', topic.id);
+                if (refreshedNodes) setNodes(refreshedNodes);
+              }} />
         
-        <div className="top-0 left-0 right-0 p-4">
-          <div className="flex items-center">
-            <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
-            {topic.description && (
-              <span className="ml-4 text-sm text-gray-300">{topic.description}</span>
-            )}
+              <div className="top-0 left-0 right-0 p-4">
+                <div className="flex items-center">
+                  <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
+                  {topic.description && (
+                    <span className="ml-4 text-sm text-gray-300">{topic.description}</span>
+                  )}
+                </div>
+              </div>
           </div>
         </div>
-        </div>
-        </div>
-        </div>
+      </div>
+    </div>
   );
 }

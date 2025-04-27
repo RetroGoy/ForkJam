@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Image from "next/image";
 
 export function Header() {
   const router = useRouter();
@@ -31,25 +32,26 @@ export function Header() {
   };
 
   return (
-    <header className="bg-gray-900 border-b-2 border-yellow-900/50">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="text-2xl font-bold tracking-[0.3em] text-yellow-500">DRUIDE</span>
-            <span className="text-3xl font-mono text-yellow-600">5000</span>
+    <header className="bg-gray-900/70 m-2 mt-3">
+        <div className="flex justify-between items-center h-24">
+
+          <Link href="/" className="flex items-center p-2">
+            <Image
+              src="/logoTitle.png"
+              alt="Logo Druide500"
+              width={250}
+              height={150} />
           </Link>
 
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center p-2">
             <button 
               onClick={handleUserClick}
-              className="retro-button px-4 py-2 flex items-center gap-2"
-            >
-              <User size={16} />
+              className="px-4 py-2 m-4 flex items-center gap-2 text-2xl font-bold text-yellow-500 border-2 border-yellow-500" >
+              <User size={26} />
               <span>{user ? user.email.split('@')[0].toUpperCase() : 'CONNECT'}</span>
             </button>
           </div>
         </div>
-      </div>
     </header>
   );
 }

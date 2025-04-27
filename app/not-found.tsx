@@ -16,7 +16,7 @@ export default function NotFound() {
       
       <h2 className="text-3xl font-bold text-white mb-2">404 - Node Not Found</h2>
       <p className="text-gray-400 max-w-md mb-8">
-        The audio node you're looking for seems to have disappeared into the ether.
+        The audio node you are looking for seems to have disappeared into the ether.
       </p>
       
       <Link href="/">

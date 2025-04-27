@@ -1,13 +1,17 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Node } from '@/lib/supabase';
+import { Node, Topic } from '@/lib/supabase';
 import { NodeCard } from './NodeCard';
+import { InlineNodeRecorder } from '@/components/ui/inlineNodeRecorder';
 
 interface NodeGraphProps {
   nodes: Node[];
+  topic: Topic;
+  user: any;
   onNodeSelect: (node: Node) => void;
   onAddChild: (parentNode: Node) => void;
+  refreshNodes: () => void;
 }
 
 type Position = {
@@ -21,18 +25,35 @@ type LayoutNode = {
   children: string[];
 };
 
-export function NodeGraph({ nodes, onNodeSelect, onAddChild }: NodeGraphProps) {
+export function NodeGraph({ nodes, topic, user, onNodeSelect, onAddChild, refreshNodes }: NodeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutNodes, setLayoutNodes] = useState<Map<string, LayoutNode>>(new Map());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [viewPosition, setViewPosition] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
-  
+
+  const isLeafNode = (nodeId: string, layoutNodes: Map<string, LayoutNode>) => {
+    const layoutNode = layoutNodes.get(nodeId);
+    return layoutNode && layoutNode.children.length === 0;
+  };
+
+  const edges = Array.from(layoutNodes.values()).flatMap((layoutNode) => {
+    return layoutNode.children.map((childId) => ({
+      from: layoutNode.node.id,
+      to: childId,
+    }));
+  });  
+
   // Initialize node positions
   useEffect(() => {
     if (!nodes.length) return;
 
+    const isLeafNode = (nodeId: string, layoutNodes: Map<string, LayoutNode>) => {
+      const layoutNode = layoutNodes.get(nodeId);
+      return layoutNode && layoutNode.children.length === 0;
+    };
+    
     // Build tree structure
     const nodeMap = new Map<string, LayoutNode>();
     const childrenMap = new Map<string, string[]>();
@@ -135,15 +156,12 @@ export function NodeGraph({ nodes, onNodeSelect, onAddChild }: NodeGraphProps) {
   return (
     <div 
       ref={containerRef}
-      className="w-full h-full overflow-hidden bg-gray-900 relative"
+      className=""
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
-    >
-      {/* Grid background */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-20" />
+      onWheel={handleWheel}>
       
       {/* Graph container with transform */}
       <div
@@ -155,56 +173,53 @@ export function NodeGraph({ nodes, onNodeSelect, onAddChild }: NodeGraphProps) {
           height: '100%',
         }}
       >
-        {/* Center point marker */}
-        <div className="absolute left-1/2 top-1/2 h-2 w-2 bg-yellow-500 rounded-full" />
-        
-        {/* Connections between nodes */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-          {Array.from(layoutNodes.values()).map((layoutNode) => (
-            layoutNode.children.map((childId) => {
-              const childNode = layoutNodes.get(childId);
-              if (!childNode) return null;
-              
-              const parentX = layoutNode.position.x + window.innerWidth / 2;
-              const parentY = layoutNode.position.y + window.innerHeight / 2;
-              const childX = childNode.position.x + window.innerWidth / 2;
-              const childY = childNode.position.y + window.innerHeight / 2;
-              
-              return (
-                <line
-                  key={`${layoutNode.node.id}-${childId}`}
-                  x1={parentX}
-                  y1={parentY}
-                  x2={childX}
-                  y2={childY}
-                  stroke="#9b782f"
-                  strokeWidth="2"
-                  strokeDasharray="4 4"
-                />
-              );
-            })
-          ))}
-        </svg>
-        
+
         {/* Nodes */}
-        {Array.from(layoutNodes.values()).map((layoutNode) => (
-          <div
-            key={layoutNode.node.id}
-            className="absolute p-2 w-64 transition-transform duration-300 cursor-pointer"
-            style={{
-              left: `calc(50% + ${layoutNode.position.x}px)`,
-              top: `calc(50% + ${layoutNode.position.y}px)`,
-              transform: 'translate(-50%, -50%)',
-            }}
-            onClick={() => handleNodeClick(layoutNode.node)}
-          >
-            <NodeCard 
-              node={layoutNode.node} 
-              isSelected={selectedNodeId === layoutNode.node.id}
-              onAddChild={() => onAddChild(layoutNode.node)}
-              allNodes={nodes} />
-          </div>
-        ))}
+        {Array.from(layoutNodes.values()).map((layoutNode) => {
+          const isLeaf = isLeafNode(layoutNode.node.id, layoutNodes);
+
+  return (
+    <React.Fragment key={layoutNode.node.id}>
+      <div
+        className="absolute p-2 w-64 transition-transform duration-300 cursor-pointer"
+        style={{
+          left: `calc(50% + ${layoutNode.position.x}px)`,
+          top: `calc(50% + ${layoutNode.position.y}px)`,
+          transform: 'translate(-50%, -50%)',
+        }}
+        onClick={() => handleNodeClick(layoutNode.node)}
+      >
+        <NodeCard 
+          node={layoutNode.node} 
+          isSelected={selectedNodeId === layoutNode.node.id}
+          onAddChild={() => onAddChild(layoutNode.node)}
+          allNodes={nodes} 
+        />
+      </div>
+
+      {/* 🎤 Inline recorder à droite du dernier node */}
+      {isLeaf && (
+        <div
+          className="absolute p-2 w-64 transition-transform duration-300"
+          style={{
+            left: `calc(50% + ${layoutNode.position.x + 300}px)`,
+            top: `calc(50% + ${layoutNode.position.y}px)`,
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <InlineNodeRecorder
+            parentId={layoutNode.node.id}
+            topicId={topic.id}
+            bpm={topic.bpm}
+            userId={user?.id ?? 'anonymous'}
+            refreshNodes={refreshNodes}
+          />
+        </div>
+      )}
+    </React.Fragment>
+  );
+})}
+
       </div>
       
       {/* Controls */}

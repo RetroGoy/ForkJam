@@ -1,10 +1,9 @@
 "use client";
 
 import React from 'react';
-import { Play, Pause, PlusCircle } from 'lucide-react';
+import { Play, Pause, Plus } from 'lucide-react';
 import { Node } from '@/lib/supabase';
 import { useAudioStore } from '@/store/useAudioStore';
-import { Waveform } from './Waveform';
 import { cn } from '@/lib/utils';
 import { getBranchFrom } from '@/lib/audioUtils';
 
@@ -35,17 +34,8 @@ export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: Nod
   };
   
   const instrumentColor = getInstrumentColor(node.instrument);
-  const waveformColor = node.instrument.toLowerCase().includes('piano') || 
-                        node.instrument.toLowerCase().includes('synth') 
-                          ? '#10b981' // green
-                          : node.instrument.toLowerCase().includes('guitar') || 
-                            node.instrument.toLowerCase().includes('bass')
-                              ? '#ef4444' // red
-                              : '#3b82f6'; // blue
   
   const handlePlayPause = () => {
-    console.log("Clicked");
-    console.log("Playing from:", node.audio_url);
     if (isPlaying) {
       stopAllNodes(); 
     }
@@ -80,17 +70,11 @@ export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: Nod
               onClick={onAddChild}
               className="rounded-full w-8 h-8 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
             >
-              <PlusCircle size={16} />
+              <Plus size={16} />
             </button>
           )}
         </div>
       </div>
-      
-      <Waveform 
-        audioUrl={node.audio_url} 
-        color={waveformColor} 
-        playing={isPlaying}
-      />
       
       <div className="flex justify-between items-center mt-2 text-xs">
         <span className="uppercase tracking-wide font-medium">

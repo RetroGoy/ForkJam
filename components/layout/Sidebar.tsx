@@ -11,14 +11,14 @@ interface SidebarProps {
 
 export function Sidebar({ topics }: SidebarProps) {
   return (
-    <div className="h-full w-[30%] min-w-[250px]  flex flex-col">
+    <div className="h-full w-[30%] min-w-[250px] flex flex-col">
 
-      <div className="flex-grow overflow-hidden bg-gray-900/70 p-2 mx-2">
+      <div className="flex-grow overflow-hidden bg-gray-900/60 p-2 mx-2 bg-blur">
         <h2 className="text-3xl font-bold pl-2 p-0.5 text-yellow-500 mb-4 border-2 border-yellow-500 text-start">TOPICS</h2>
         <TopicList topics={topics} />
       </div>
       
-      <div className=" bg-gray-900/70 p-2 m-2">
+      <div className=" bg-gray-900/60 p-2 m-2">
           <h3 className="text-3xl font-bold pl-2 p-0.5 text-yellow-500 mb-4 border-2 border-yellow-500 text-start">NEWS</h3>
           <div className="space-y-3">
             <div className="bg-gray-900/80 border border-yellow-900/30 backdrop-blur-sm rounded-none p-3">

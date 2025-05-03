@@ -141,7 +141,7 @@ export function InlineNodeRecorder({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="w-10 h-10 flex items-center justify-center rounded-full bg-yellow-700 hover:bg-yellow-600 text-white"
+        className="w-10 h-10 flex items-center justify-center bg-yellow-700 hover:bg-yellow-600 text-white"
       >
         <Plus size={18} />
       </button>
@@ -149,7 +149,7 @@ export function InlineNodeRecorder({
   }
 
   return (
-    <div className="p-4 bg-gray-800 border border-yellow-900/50 rounded-md space-y-4">
+    <div className="p-4 bg-gray-800 border border-yellow-900/50 space-y-4">
       <div className="flex justify-between">
         <h3 className="text-yellow-400 font-bold">Add Node</h3>
         <button onClick={resetRecorder} className="text-red-400 hover:text-red-300">

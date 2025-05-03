@@ -31,9 +31,9 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
         <div className="flex">
           <Sidebar topics={topics} />
           
-          <div className="flex flex-col m-8 mx-12">
+          <div className="flex flex-col m-8 mx-12 h-full overflow-scroll">
             
-            <h1 className="text-5xl font-extrabold mb-6 text-yellow-500 tracking-wider">
+            <h1 className="text-5xl font-extrabold mb-6 text-yellow-500">
               Welcome to DRUIDE 500
             </h1>
 

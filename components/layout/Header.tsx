@@ -32,7 +32,7 @@ export function Header() {
   };
 
   return (
-    <header className="bg-gray-900/70 m-2 mt-3">
+    <header className="bg-gray-900/60 m-2 mt-3">
         <div className="flex justify-between items-center h-24">
 
           <Link href="/" className="flex items-center p-2">

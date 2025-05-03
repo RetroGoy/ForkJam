@@ -1,251 +1,211 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Node, Topic } from '@/lib/supabase';
-import { NodeCard } from './NodeCard';
-import { InlineNodeRecorder } from '@/components/ui/inlineNodeRecorder';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ReactFlow, {
+  Background,
+  Controls,
+  Handle,
+  Position,
+  Node as RFNode,
+  Edge as RFEdge,
+  useEdgesState,
+  useNodesState,
+  ReactFlowProvider,
+} from "reactflow";
+import "reactflow/dist/style.css";
 
+import { NodeCard } from "./NodeCard";
+import { InlineNodeRecorder } from "@/components/ui/inlineNodeRecorder";
+import type { Node } from "@/lib/supabase";
+import { redirect } from "next/dist/server/api-utils";
+
+// ────────────────────────────────────────────────────────────────────────────
+// Layout & style constants
+// ────────────────────────────────────────────────────────────────────────────
+const H_SPACING = 320; // horizontal gap between generations
+const V_SPACING = 220; // vertical gap between siblings
+const PLUS_OFFSET_Y = 150; // additional gap before placing the "+" node under last child
+const PLUS_OFFSET_X = 150; // additional gap before placing the "+" node under last child
+const EDGE_STYLE = { stroke: "#facc15", strokeWidth: 3 } as const; // all edges share this style
+
+// utility to create a styled edge quickly
+const addEdge = (edges: RFEdge[], source: string, target: string) => {
+  edges.push({ id: `${source}-${target}`, source, target });
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Custom React‑Flow node: MusicNode (real DB record)
+// ────────────────────────────────────────────────────────────────────────────
+function MusicNode({ data }: any) {
+  const { node, allNodes, onAddChild } = data;
+
+  return (
+    <div className="relative group">
+      <Handle type="target" position={Position.Left} id="t" style={{ opacity: 0, width: 7, height: 7 }} />
+      <NodeCard
+        node={node}
+        allNodes={allNodes}
+        onAddChild={() => onAddChild(node)}
+      />
+      <Handle type="source" position={Position.Right} id="s" style={{ opacity: 0, width: 7, height: 7 }} />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Custom React‑Flow node: PlusNode (visual only – invokes InlineNodeRecorder)
+// ────────────────────────────────────────────────────────────────────────────
+function PlusNode({ data }: any) {
+  const { parentId, topicId, bpm, userId, refreshNodes } = data;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <Handle type="target" position={Position.Left} id="pt" style={{ opacity: 0, width: 1, height: 1 }} />
+
+        <InlineNodeRecorder
+          parentId={parentId}
+          topicId={topicId}
+          bpm={bpm}
+          userId={userId}
+          refreshNodes={refreshNodes}
+        />
+
+      <Handle type="source" position={Position.Right} id="ps" style={{ opacity: 0, width: 1, height: 1 }} />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Main component
+// ────────────────────────────────────────────────────────────────────────────
 interface NodeGraphProps {
   nodes: Node[];
-  topic: Topic;
-  user: any;
+  topic: { id: string; bpm: number };
+  user: { id: string } | null;
   onNodeSelect: (node: Node) => void;
   onAddChild: (parentNode: Node) => void;
   refreshNodes: () => void;
 }
 
-type Position = {
-  x: number;
-  y: number;
-};
+function NodeGraphComponent({ nodes, topic, user, onNodeSelect, onAddChild, refreshNodes }: NodeGraphProps) {
+  // internal React‑Flow state helpers
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<RFNode[]>([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<RFEdge[]>([]);
 
-type LayoutNode = {
-  node: Node;
-  position: Position;
-  children: string[];
-};
+  // register custom nodeTypes once
+  const nodeTypes = useMemo(() => ({ music: MusicNode, plus: PlusNode }), []);
 
-export function NodeGraph({ nodes, topic, user, onNodeSelect, onAddChild, refreshNodes }: NodeGraphProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [layoutNodes, setLayoutNodes] = useState<Map<string, LayoutNode>>(new Map());
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [viewPosition, setViewPosition] = useState({ x: 0, y: 0 });
-  const [scale, setScale] = useState(1);
+  // ────────────────────────────── layout algo ──────────────────────────────
+  const buildGraph = useCallback(() => {
+    if (nodes.length === 0) return { graphNodes: [], graphEdges: [] };
 
-  const isLeafNode = (nodeId: string, layoutNodes: Map<string, LayoutNode>) => {
-    const layoutNode = layoutNodes.get(nodeId);
-    return layoutNode && layoutNode.children.length === 0;
-  };
-
-  const edges = Array.from(layoutNodes.values()).flatMap((layoutNode) => {
-    return layoutNode.children.map((childId) => ({
-      from: layoutNode.node.id,
-      to: childId,
-    }));
-  });  
-
-  // Initialize node positions
-  useEffect(() => {
-    if (!nodes.length) return;
-
-    const isLeafNode = (nodeId: string, layoutNodes: Map<string, LayoutNode>) => {
-      const layoutNode = layoutNodes.get(nodeId);
-      return layoutNode && layoutNode.children.length === 0;
-    };
-    
-    // Build tree structure
-    const nodeMap = new Map<string, LayoutNode>();
+    /** helpers */
+    const nodeMap = new Map<string, Node>();
     const childrenMap = new Map<string, string[]>();
-    
-    // First, create all nodes with default positions
-    nodes.forEach((node) => {
-      nodeMap.set(node.id, {
-        node,
-        position: { x: 0, y: 0 },
-        children: [],
+
+    nodes.forEach((n) => {
+      nodeMap.set(n.id, n);
+      if (n.parent_node_id) {
+        if (!childrenMap.has(n.parent_node_id)) childrenMap.set(n.parent_node_id, []);
+        childrenMap.get(n.parent_node_id)!.push(n.id);
+      }
+    });
+
+    const roots = nodes.filter((n) => !n.parent_node_id);
+    const graphNodes: RFNode[] = [];
+    const graphEdges: RFEdge[] = [];
+
+    /** Recursively layout a subtree */
+    const layout = (
+      id: string,
+      level: number,
+      order: number,
+      siblingCount: number
+    ) => {
+      // 1. position current node
+      const x = level * H_SPACING;
+      const baseY = order * V_SPACING - ((siblingCount - 1) * V_SPACING) / 2;
+
+      graphNodes.push({
+        id,
+        type: "music",
+        position: { x, y: baseY },
+        draggable: false,
+        data: { node: nodeMap.get(id), allNodes: nodes, onAddChild },
       });
-      
-      // Initialize children arrays
-      if (!childrenMap.has(node.id)) {
-        childrenMap.set(node.id, []);
-      }
-      
-      // Add this node as a child of its parent
-      if (node.parent_node_id) {
-        const parentChildren = childrenMap.get(node.parent_node_id) || [];
-        parentChildren.push(node.id);
-        childrenMap.set(node.parent_node_id, parentChildren);
-      }
-    });
-    
-    // Update children lists in layout nodes
-    childrenMap.forEach((children, nodeId) => {
-      const layoutNode = nodeMap.get(nodeId);
-      if (layoutNode) {
-        layoutNode.children = children;
-      }
-    });
-    
-    // Find root nodes (those without parents)
-    const rootNodes = nodes.filter(node => !node.parent_node_id);
-    
-    // Position nodes in a tree layout
-    const HORIZONTAL_SPACING = 300;
-    const VERTICAL_SPACING = 200;
-    
-    const positionNode = (nodeId: string, level: number, index: number, totalSiblings: number) => {
-      const layoutNode = nodeMap.get(nodeId);
-      if (!layoutNode) return;
-      
-      // Calculate x based on level
-      const x = level * HORIZONTAL_SPACING;
-      
-      // Calculate y based on siblings
-      const siblingSpacing = VERTICAL_SPACING;
-      const totalHeight = (totalSiblings - 1) * siblingSpacing;
-      const startY = -totalHeight / 2;
-      const y = startY + index * siblingSpacing;
-      
-      layoutNode.position = { x, y };
-      
-      // Position children
-      const children = layoutNode.children;
-      children.forEach((childId, childIndex) => {
-        positionNode(childId, level + 1, childIndex, children.length);
+
+      // 2. fetch children & always append plus node id
+      const children = childrenMap.get(id) ?? [];
+      const plusId = `${id}-plus`;
+      const items = [...children, plusId];
+
+      // 3. place plus node BELOW the last child (or current node when no children)
+      const lastIdx = children.length; // index in items array
+      const plusY = baseY + (children.length > 0 ? (lastIdx * V_SPACING) : 0) + PLUS_OFFSET_Y;
+      graphNodes.push({
+        id: plusId,
+        type: "plus",
+        position: { x: x + H_SPACING, y: plusY },
+        draggable: false,
+        data: {
+          parentId: id,
+          topicId: topic.id,
+          bpm: topic.bpm,
+          userId: user?.id ?? "anonymous",
+          refreshNodes,
+        },
+      });
+
+      // 4. edges from parent → each item (child + plus)
+      addEdge(graphEdges, id, plusId);
+      children.forEach((childId, idx) => {
+        addEdge(graphEdges, id, childId);
+        layout(childId, level + 1, idx, children.length);
       });
     };
-    
-    // Position each root node and its descendants
-    rootNodes.forEach((rootNode, index) => {
-      positionNode(rootNode.id, 0, index, rootNodes.length);
-    });
-    
-    setLayoutNodes(nodeMap);
-  }, [nodes]);
-  
-  // Handle mouse interactions for panning and zooming
-  const handleMouseDown = (event: React.MouseEvent) => {
-    setDragging(true);
-  };
-  
-  const handleMouseMove = (event: React.MouseEvent) => {
-    if (!dragging) return;
-    
-    setViewPosition(prev => ({
-      x: prev.x + event.movementX,
-      y: prev.y + event.movementY,
-    }));
-  };
-  
-  const handleMouseUp = () => {
-    setDragging(false);
-  };
-  
-  const handleWheel = (event: React.WheelEvent) => {
-    event.preventDefault();
-    const scaleFactor = event.deltaY > 0 ? 0.9 : 1.1;
-    setScale(prev => Math.min(Math.max(prev * scaleFactor, 0.3), 2));
-  };
-  
-  const handleNodeClick = (node: Node) => {
-    setSelectedNodeId(node.id);
-    onNodeSelect(node);
-  };
 
+    // layout all roots (there can be multiple trees for a topic)
+    roots.forEach((root, idx) => layout(root.id, 0, idx, roots.length));
+
+    return { graphNodes, graphEdges };
+  }, [nodes, topic, user, refreshNodes, onAddChild]);
+
+  // re‑layout whenever db nodes change
+  useEffect(() => {
+    const { graphNodes, graphEdges } = buildGraph();
+    setRfNodes(graphNodes);
+    setRfEdges(graphEdges);
+  }, [buildGraph, setRfNodes, setRfEdges]);
+
+  // ─────────────────────────────── render ────────────────────────────────
   return (
-    <div 
-      ref={containerRef}
-      className=""
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}>
-      
-      {/* Graph container with transform */}
-      <div
-        className="absolute"
-        style={{
-          transform: `translate(${viewPosition.x}px, ${viewPosition.y}px) scale(${scale})`,
-          transformOrigin: 'center',
-          width: '100%',
-          height: '100%',
-        }}
-      >
-
-        {/* Nodes */}
-        {Array.from(layoutNodes.values()).map((layoutNode) => {
-          const isLeaf = isLeafNode(layoutNode.node.id, layoutNodes);
-
-  return (
-    <React.Fragment key={layoutNode.node.id}>
-      <div
-        className="absolute p-2 w-64 transition-transform duration-300 cursor-pointer"
-        style={{
-          left: `calc(50% + ${layoutNode.position.x}px)`,
-          top: `calc(50% + ${layoutNode.position.y}px)`,
-          transform: 'translate(-50%, -50%)',
-        }}
-        onClick={() => handleNodeClick(layoutNode.node)}
-      >
-        <NodeCard 
-          node={layoutNode.node} 
-          isSelected={selectedNodeId === layoutNode.node.id}
-          onAddChild={() => onAddChild(layoutNode.node)}
-          allNodes={nodes} 
-        />
-      </div>
-
-      {/* 🎤 Inline recorder à droite du dernier node */}
-      {isLeaf && (
-        <div
-          className="absolute p-2 w-64 transition-transform duration-300"
-          style={{
-            left: `calc(50% + ${layoutNode.position.x + 300}px)`,
-            top: `calc(50% + ${layoutNode.position.y}px)`,
-            transform: 'translate(-50%, -50%)',
+    <ReactFlowProvider>
+      <div className="w-full h-full">
+        <ReactFlow
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={(_, n) => {
+            if (n.type === "music") onNodeSelect((n.data as any).node);
           }}
-        >
-          <InlineNodeRecorder
-            parentId={layoutNode.node.id}
-            topicId={topic.id}
-            bpm={topic.bpm}
-            userId={user?.id ?? 'anonymous'}
-            refreshNodes={refreshNodes}
-          />
-        </div>
-      )}
-    </React.Fragment>
-  );
-})}
-
+          nodeTypes={nodeTypes}
+          defaultEdgeOptions={{ type: "smoothstep", style: EDGE_STYLE }}
+          nodesDraggable={false}
+          panOnDrag
+          zoomOnScroll
+          fitView>
+            <div className="absolute right-0 bottom-0 z-10">
+              <Controls />
+            </div>
+          <Controls />
+          <Background gap={12} size={1} />
+        </ReactFlow>
       </div>
-      
-      {/* Controls */}
-      <div className="absolute bottom-4 right-4 flex gap-2">
-        <button 
-          className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded"
-          onClick={() => setScale(prev => Math.min(prev + 0.1, 2))}
-        >
-          +
-        </button>
-        <button 
-          className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded"
-          onClick={() => setScale(prev => Math.max(prev - 0.1, 0.3))}
-        >
-          -
-        </button>
-        <button 
-          className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded"
-          onClick={() => {
-            setViewPosition({ x: 0, y: 0 });
-            setScale(1);
-          }}
-        >
-          Reset
-        </button>
-      </div>
-    </div>
+    </ReactFlowProvider>
   );
 }
+
+export { NodeGraphComponent as NodeGraph };
+export default NodeGraphComponent;

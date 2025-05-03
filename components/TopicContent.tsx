@@ -116,42 +116,77 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
   };
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 overflow-hidden bg-gray-800 relative">
-
-        <div className='z-10'>
-          <Header />
-        </div>
-        <div className="flex">
-          <div className='z-10'>
-            <Sidebar topics={topics} />
-          </div>
-          <div className='z-0'>
-            <NodeGraph
-              nodes={nodes}
-              onNodeSelect={handleNodeSelect}
-              onAddChild={handleAddChildClick}
-              topic={topic}
-              user={currentUser}
-              refreshNodes={async () => {
-                const { data: refreshedNodes } = await supabase
-                  .from('nodes')
-                  .select('*')
-                  .eq('topic_id', topic.id);
-                if (refreshedNodes) setNodes(refreshedNodes);
-              }} />
-        
-              <div className="top-0 left-0 right-0 p-4">
-                <div className="flex items-center">
-                  <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
-                  {topic.description && (
-                    <span className="ml-4 text-sm text-gray-300">{topic.description}</span>
-                  )}
-                </div>
-              </div>
-          </div>
-        </div>
-      </div>
+    <div className="relative h-screen w-screen overflow-hidden">
+    <div className="absolute inset-0 z-0">
+      <NodeGraph
+        nodes={nodes}
+        onNodeSelect={handleNodeSelect}
+        onAddChild={handleAddChildClick}
+        topic={topic}
+        user={currentUser}
+        refreshNodes={async () => {
+          const { data: refreshedNodes } = await supabase
+            .from('nodes')
+            .select('*')
+            .eq('topic_id', topic.id);
+          if (refreshedNodes) setNodes(refreshedNodes);
+        }}
+      />
     </div>
+
+    {/* Fixed Header */}
+    <header className="fixed top-0 left-0 right-0 z-20">
+      <Header />
+    </header>
+
+    {/* Fixed Sidebar — collapses on small screens */}
+    <aside
+      className="fixed top-32 left-0 z-20 h-[calc(100vh-4rem)] overflow-y-auto sm:-translate-x-full sm:transition-transform sm:duration-300 sm:ease-in-out sm:data-[open='true']:translate-x-0"
+      data-open="true"
+    >
+      <Sidebar topics={topics} />
+    </aside>
+
+    {/* Topic title bar — centered bottom */}
+    <div className="pointer-events-none fixed bottom-4 left-1/2 z-20 w-max -translate-x-1/2 rounded-xl bg-gray-900/70 px-4 py-2 text-center backdrop-blur-md">
+      <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
+      {topic.description && <p className="text-sm text-gray-300">{topic.description}</p>}
+    </div>
+  </div>
+    // <div className="h-full">
+    //   <div className="overflow-hidden bg-gray-800">
+
+    //     <div className='z-10'>
+    //       <Header />
+    //     </div>
+    //     <div className='z-10'>
+    //       <Sidebar topics={topics} />
+    //     </div>
+    //     <div className='z-0'>
+    //       <NodeGraph
+    //         nodes={nodes}
+    //         onNodeSelect={handleNodeSelect}
+    //         onAddChild={handleAddChildClick}
+    //         topic={topic}
+    //         user={currentUser}
+    //         refreshNodes={async () => {
+    //           const { data: refreshedNodes } = await supabase
+    //             .from('nodes')
+    //             .select('*')
+    //             .eq('topic_id', topic.id);
+    //           if (refreshedNodes) setNodes(refreshedNodes);
+    //         }} />
+      
+    //       <div className="top-0 left-0 right-0 p-4">
+    //         <div className="flex items-center">
+    //           <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
+    //           {topic.description && (
+    //             <span className="ml-4 text-sm text-gray-300">{topic.description}</span>
+    //           )}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   </div>
+    // </div>
   );
 }

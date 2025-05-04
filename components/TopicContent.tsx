@@ -153,40 +153,5 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
       {topic.description && <p className="text-sm text-gray-300">{topic.description}</p>}
     </div>
   </div>
-    // <div className="h-full">
-    //   <div className="overflow-hidden bg-gray-800">
-
-    //     <div className='z-10'>
-    //       <Header />
-    //     </div>
-    //     <div className='z-10'>
-    //       <Sidebar topics={topics} />
-    //     </div>
-    //     <div className='z-0'>
-    //       <NodeGraph
-    //         nodes={nodes}
-    //         onNodeSelect={handleNodeSelect}
-    //         onAddChild={handleAddChildClick}
-    //         topic={topic}
-    //         user={currentUser}
-    //         refreshNodes={async () => {
-    //           const { data: refreshedNodes } = await supabase
-    //             .from('nodes')
-    //             .select('*')
-    //             .eq('topic_id', topic.id);
-    //           if (refreshedNodes) setNodes(refreshedNodes);
-    //         }} />
-      
-    //       <div className="top-0 left-0 right-0 p-4">
-    //         <div className="flex items-center">
-    //           <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
-    //           {topic.description && (
-    //             <span className="ml-4 text-sm text-gray-300">{topic.description}</span>
-    //           )}
-    //         </div>
-    //       </div>
-    //     </div>
-    //   </div>
-    // </div>
   );
 }

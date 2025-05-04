@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topic } from '@/lib/supabase';
 import { useTopicStore } from '@/store/useTopicStore';
 import { Header } from '@/components/layout/Header';
-import { Plus } from 'lucide-react';
+import { Plus, Menu } from 'lucide-react';
 import Link from 'next/link';
 
 interface HomeContentProps {
@@ -22,17 +22,36 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
   useEffect(() => {
     setTopics(initialTopics);
   }, [initialTopics, setTopics]);
-  
-  return (
-    <div className="flex h-full">
-      <div className="flex-1 overflow-hidden bg-gray-800 relative">
 
+  const [showSidebar, setShowSidebar] = useState(false);
+  const toggleSidebar = () => setShowSidebar((prev) => !prev);
+
+  return (
+    <div className="flex h-screen">
+      {/* Main container */}
+      <div className="flex-1 overflow-y-auto bg-gray-800 relative">
+        {/* Header + hamburger (mobile only) */}
         <Header />
+        <button
+          onClick={toggleSidebar}
+          className="md:hidden fixed top-4 left-4 z-50 p-2 rounded bg-gray-700 hover:bg-gray-600 focus:outline-none"
+          aria-label="Toggle sidebar"
+        >
+          {/* simple hamburger icon */}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {/* Desktop layout */}
         <div className="flex">
-          <Sidebar topics={topics} />
-          
-          <div className="flex flex-col m-8 mx-12 h-full overflow-scroll">
-            
+          {/* Sticky sidebar on desktop */}
+          <div className="hidden md:block sticky top-0 h-screen shrink-0">
+            <Sidebar topics={topics} />
+          </div>
+
+          {/* Main content area */}
+          <div className="flex flex-col m-8 mx-12 min-h-full">
             <h1 className="text-5xl font-extrabold mb-6 text-yellow-500">
               Welcome to DRUIDE 500
             </h1>
@@ -65,12 +84,11 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
               </div>
             </div>
 
+            {/* Collaborators */}
             <div className="border-2 border-yellow-700/30 p-6 mt-12 text-center">
-              <h3 className="text-s font-bold text-yellow-500 mb-6">
-                COLLABORATORS
-              </h3>
+              <h3 className="text-s font-bold text-yellow-500 mb-6">COLLABORATORS</h3>
               <div className="flex flex-wrap justify-center gap-6">
-              <div className="w-24 h-10 flex items-center justify-center overflow-hidden">
+                {/* <div className="w-24 h-10 flex items-center justify-center overflow-hidden">
                   <img src="/collab1.png" alt="Partner 1" className="object-cover w-full h-full" />
                 </div>
                 <div className="w-24 h-10 flex items-center justify-center overflow-hidden">
@@ -78,18 +96,37 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
                 </div>
                 <div className="w-24 h-10 flex items-center justify-center overflow-hidden">
                   <img src="/collab3.png" alt="Partner 3" className="object-cover w-full h-full" />
-                </div>
+                </div> */}
               </div>
             </div>
-            <button 
-                  onClick={() => fetchTopics()}
-                  className="text-yellow-500 hover:text-yellow-400 transition-colors"
-                >
-                  Refresh
-                </button>
+
+            {/* Refresh button */}
+            <button
+              onClick={fetchTopics}
+              className="text-yellow-500 hover:text-yellow-400 transition-colors mt-8 self-start"
+            >
+              Refresh
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile sidebar overlay */}
+      {showSidebar && (
+        <>
+          {/* Off‑canvas sidebar */}
+          <div className="fixed inset-y-0 left-0 z-50 max-w-64 bg-black bg-opacity-70 overflow-y-auto md:hidden">
+            <Sidebar topics={topics} />
+          </div>
+
+          {/* Semi‑transparent overlay to close */}
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={toggleSidebar}
+            aria-label="Close sidebar"
+          />
+        </>
+      )}
     </div>
   );
 }

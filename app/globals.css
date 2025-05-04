@@ -78,21 +78,9 @@
   100% { opacity: 0.2; }
 }
 
-.bg-grid-pattern {
-  background-size: 80px 80px;
-  background-image: 
-    linear-gradient(to right, rgb(145, 106, 16) 3px, transparent 4px),
-    linear-gradient(to bottom, rgb(145, 106, 16) 3px, transparent 4px);
-  animation: gridPulse 5s infinite;
-}
-
 ::-webkit-scrollbar {
   width: 6px;
 }
 ::-webkit-scrollbar-thumb {
   background-color: #facc15;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
 }

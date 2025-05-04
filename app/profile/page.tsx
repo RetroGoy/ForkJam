@@ -46,7 +46,7 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-yellow-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -57,7 +57,7 @@ export default function ProfilePage() {
         <div className="bg-gray-800 rounded-lg p-6 mb-8 border border-yellow-900/30">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-yellow-500 mb-2">
+              <h1 className="text-2xl font-bold text-primary mb-2">
                 {user?.email.split('@')[0].toUpperCase()}
               </h1>
               <p className="text-gray-400">{user?.email}</p>
@@ -92,7 +92,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-xl font-bold text-yellow-500 mb-4">Recent Contributions</h2>
+          <h2 className="text-xl font-bold text-primary mb-4">Recent Contributions</h2>
           {userNodes.map((node: any) => (
             <div
               key={node.id}

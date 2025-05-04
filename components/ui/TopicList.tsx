@@ -39,9 +39,9 @@ export function TopicList({ topics }: TopicListProps) {
 
   const getColorClass = (instrument?: string) => {
     const lower = instrument?.toLowerCase();
-    if (lower?.includes('guitar') || lower?.includes('bass')) return 'bg-green-700';
-    if (lower?.includes('drum')) return 'bg-blue-700';
-    if (lower?.includes('vocal')) return 'bg-pink-700';
+    if (lower?.includes('rock') || lower?.includes('bass')) return 'bg-green-700';
+    if (lower?.includes('experimental')) return 'bg-blue-700';
+    if (lower?.includes('jazz')) return 'bg-pink-700';
     if (lower?.includes('synth') || lower?.includes('piano')) return 'bg-green-700';
     return 'bg-red-700';
   };
@@ -60,7 +60,7 @@ export function TopicList({ topics }: TopicListProps) {
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            className="w-full pl-9 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
 

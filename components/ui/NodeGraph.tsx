@@ -1,3 +1,6 @@
+// NodeGraph.tsx
+// Updated: Automatically displays a centered InlineNodeRecorder when the topic has no nodes.
+
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -17,7 +20,6 @@ import "reactflow/dist/style.css";
 import { NodeCard } from "./NodeCard";
 import { InlineNodeRecorder } from "@/components/ui/inlineNodeRecorder";
 import type { Node } from "@/lib/supabase";
-import { redirect } from "next/dist/server/api-utils";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Layout & style constants
@@ -25,12 +27,11 @@ import { redirect } from "next/dist/server/api-utils";
 const H_SPACING = 320; // horizontal gap between generations
 const V_SPACING = 220; // vertical gap between siblings
 const PLUS_OFFSET_Y = 150; // additional gap before placing the "+" node under last child
-const PLUS_OFFSET_X = 150; // additional gap before placing the "+" node under last child
 const EDGE_STYLE = { stroke: "#facc15", strokeWidth: 3 } as const; // all edges share this style
 
 // utility to create a styled edge quickly
 const addEdge = (edges: RFEdge[], source: string, target: string) => {
-  edges.push({ id: `${source}-${target}`, source, target });
+  edges.push({ id: `${source}-${target}`, source, target, style: EDGE_STYLE });
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -42,11 +43,7 @@ function MusicNode({ data }: any) {
   return (
     <div className="relative group">
       <Handle type="target" position={Position.Left} id="t" style={{ opacity: 0, width: 7, height: 7 }} />
-      <NodeCard
-        node={node}
-        allNodes={allNodes}
-        onAddChild={() => onAddChild(node)}
-      />
+      <NodeCard node={node} allNodes={allNodes} onAddChild={() => onAddChild(node)} />
       <Handle type="source" position={Position.Right} id="s" style={{ opacity: 0, width: 7, height: 7 }} />
     </div>
   );
@@ -57,19 +54,18 @@ function MusicNode({ data }: any) {
 // ────────────────────────────────────────────────────────────────────────────
 function PlusNode({ data }: any) {
   const { parentId, topicId, bpm, userId, refreshNodes } = data;
-  const [open, setOpen] = useState(false);
 
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} id="pt" style={{ opacity: 0, width: 1, height: 1 }} />
 
-        <InlineNodeRecorder
-          parentId={parentId}
-          topicId={topicId}
-          bpm={bpm}
-          userId={userId}
-          refreshNodes={refreshNodes}
-        />
+      <InlineNodeRecorder
+        parentId={parentId}
+        topicId={topicId}
+        bpm={bpm}
+        userId={userId}
+        refreshNodes={refreshNodes}
+      />
 
       <Handle type="source" position={Position.Right} id="ps" style={{ opacity: 0, width: 1, height: 1 }} />
     </div>
@@ -98,7 +94,29 @@ function NodeGraphComponent({ nodes, topic, user, onNodeSelect, onAddChild, refr
 
   // ────────────────────────────── layout algo ──────────────────────────────
   const buildGraph = useCallback(() => {
-    if (nodes.length === 0) return { graphNodes: [], graphEdges: [] };
+    /**
+     * EMPTY STATE: If the topic contains no nodes, render a single centred InlineNodeRecorder.
+     * Keeping the React‑Flow canvas active allows future nodes to be positioned relative to (0,0).
+     */
+    if (nodes.length === 0) {
+      const graphNodes: RFNode[] = [
+        {
+          id: "root-plus",
+          type: "plus",
+          position: { x: 0, y: 0 }, // centred by React‑Flow's fitView
+          draggable: false,
+          data: {
+            parentId: null,
+            topicId: topic.id,
+            bpm: topic.bpm,
+            userId: user?.id ?? "anonymous",
+            refreshNodes,
+          },
+        },
+      ];
+
+      return { graphNodes, graphEdges: [] };
+    }
 
     /** helpers */
     const nodeMap = new Map<string, Node>();
@@ -142,7 +160,7 @@ function NodeGraphComponent({ nodes, topic, user, onNodeSelect, onAddChild, refr
 
       // 3. place plus node BELOW the last child (or current node when no children)
       const lastIdx = children.length; // index in items array
-      const plusY = baseY + (children.length > 0 ? (lastIdx * V_SPACING) : 0) + PLUS_OFFSET_Y;
+      const plusY = baseY + (children.length > 0 ? lastIdx * V_SPACING : 0) + PLUS_OFFSET_Y;
       graphNodes.push({
         id: plusId,
         type: "plus",
@@ -195,11 +213,11 @@ function NodeGraphComponent({ nodes, topic, user, onNodeSelect, onAddChild, refr
           nodesDraggable={false}
           panOnDrag
           zoomOnScroll
-          fitView>
-            <div className="absolute right-0 bottom-0 z-10">
-              <Controls />
-            </div>
-          <Controls />
+          fitView
+        >
+          <div className="absolute right-0 bottom-0 z-10">
+            <Controls />
+          </div>
           <Background gap={12} size={1} />
         </ReactFlow>
       </div>

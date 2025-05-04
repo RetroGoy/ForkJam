@@ -11,19 +11,14 @@ export const metadata: Metadata = {
   description: 'A retro-futuristic music collaboration platform for building tree-like musical compositions',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-      </head>
       <body className={`${inter.className} bg-gray-900 text-gray-100`}>
         <div className="flex flex-col h-screen overflow-hidden">
           <main className="flex-1 overflow-hidden">{children}</main>
         </div>
+        <Toaster position="top-center" toastOptions={{ duration: 4000 }} />
       </body>
     </html>
   );

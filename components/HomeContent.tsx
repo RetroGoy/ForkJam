@@ -35,8 +35,7 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
         <button
           onClick={toggleSidebar}
           className="md:hidden fixed top-4 left-4 z-50 p-2 rounded bg-gray-700 hover:bg-gray-600 focus:outline-none"
-          aria-label="Toggle sidebar"
-        >
+          aria-label="Toggle sidebar">
           {/* simple hamburger icon */}
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -46,7 +45,7 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
         {/* Desktop layout */}
         <div className="flex">
           {/* Sticky sidebar on desktop */}
-          <div className="hidden md:block sticky top-0 h-screen shrink-0">
+          <div className="hidden md:block sticky top-0 shrink-0">
             <Sidebar topics={topics} />
           </div>
 

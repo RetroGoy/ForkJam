@@ -5,6 +5,9 @@ import { Plus, Save, X, Mic, Square, Loader2 } from "lucide-react";
 import { AudioRecorder } from "@/lib/audioRecorder";
 import { uploadAudioToSupabase } from "@/lib/uploadAudioToSupabase";
 import { createNode } from "@/lib/createNode";
+import { useRouter } from "next/navigation";   
+import toast from "react-hot-toast";     
+import { supabase } from "@/lib/supabase";  
 
 interface InlineNodeRecorderProps {
   parentId: string;
@@ -33,21 +36,23 @@ export function InlineNodeRecorder({
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
+  const MAX_DURATION = 180;    
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerRef = useRef<number | null>(null);
-
+  
   // Handle start recording
   const handleRecord = async () => {
     const permission = await recorder.requestPermission();
-    if (permission) {
-      await recorder.start();
-      setIsRecording(true);
-      setElapsedTime(0);
-      startTimer();
-      startVisualizer();
-    }
+    if (!permission) return;
+  
+    await recorder.start();
+    setIsRecording(true);
+    setElapsedTime(0);
+    startTimer();          // <-- n’oublie pas
+    startVisualizer();
   };
+  
 
   // Handle stop recording
   const handleStop = async () => {
@@ -59,15 +64,24 @@ export function InlineNodeRecorder({
     stopVisualizer();
   };
 
-  // Save node
+  const router = useRouter();
   const handleSave = async () => {
+    const { data: { user }, } = await supabase.auth.getUser();
+  
+    if (!user) {                  
+      toast.error('Vous devez être connecté pour créer un node');
+      router.push('/auth?redirectTo=' + encodeURIComponent(window.location.pathname));
+      return;
+    }
+
     if (!title || !instrument || !blob) return;
+    if (elapsedTime > MAX_DURATION) return; 
+    
     setIsLoading(true);
-
     const audio_url = await uploadAudioToSupabase(blob);
-    if (!audio_url) return;
-
-    await createNode({
+    if (!audio_url) { setIsLoading(false); return; }    
+    
+    await createNode({                          
       title,
       instrument,
       bpm,
@@ -76,7 +90,7 @@ export function InlineNodeRecorder({
       audio_url,
       user_id: userId,
     });
-
+    
     refreshNodes();
     resetRecorder();
   };
@@ -95,13 +109,15 @@ export function InlineNodeRecorder({
     stopVisualizer();
   };
 
-  // Timer functions
   const startTimer = () => {
     timerRef.current = setInterval(() => {
-      setElapsedTime((prev) => prev + 1);
+      setElapsedTime(prev => {
+        if (prev + 1 >= MAX_DURATION) handleStop();     // auto‑stop
+        return prev + 1;
+      });
     }, 1000);
   };
-
+  
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
   };

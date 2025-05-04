@@ -1,18 +1,19 @@
+import { notFound } from 'next/navigation';
 import { getTopic, getNodesByTopic } from '@/lib/supabase';
 import { TopicContent } from '@/components/TopicContent';
-import { notFound } from 'next/navigation';
 
-interface TopicPageProps {
-  params: { id: string };
-}
+export default async function TopicPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { id } = await params;
 
-export default async function TopicPage({ params }: TopicPageProps) {
-  const topic = await getTopic(params.id);
-  const nodes = await getNodesByTopic(params.id);
+  const topic = await getTopic(id);
+  const nodes = await getNodesByTopic(id);
 
-  if (!topic) {
-    return <div className="p-8 text-red-500">Topic not found.</div>;
-  }
+  if (!topic) {notFound();}
 
   return <TopicContent initialTopic={topic} initialNodes={nodes} />;
 }

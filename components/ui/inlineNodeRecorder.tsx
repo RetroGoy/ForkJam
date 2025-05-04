@@ -5,7 +5,6 @@ import { Plus, Save, X, Mic, Square, Loader2 } from "lucide-react";
 import { AudioRecorder } from "@/lib/audioRecorder";
 import { uploadAudioToSupabase } from "@/lib/uploadAudioToSupabase";
 import { createNode } from "@/lib/createNode";
-import { useRouter } from "next/navigation";   
 import toast from "react-hot-toast";     
 import { supabase } from "@/lib/supabase";  
 
@@ -64,13 +63,11 @@ export function InlineNodeRecorder({
     stopVisualizer();
   };
 
-  const router = useRouter();
   const handleSave = async () => {
     const { data: { user }, } = await supabase.auth.getUser();
   
     if (!user) {                  
       toast.error('Vous devez être connecté pour créer un node');
-      router.push('/auth?redirectTo=' + encodeURIComponent(window.location.pathname));
       return;
     }
 
@@ -94,6 +91,18 @@ export function InlineNodeRecorder({
     refreshNodes();
     resetRecorder();
   };
+
+    /* ✅ nouveau handler pour le bouton « + » */
+    const handleOpenRecorder = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+  
+      if (!user) {
+        toast.error("Connecte‑toi pour ajouter un node ✨");
+        return;                          // on s’arrête là, rien ne s’ouvre
+      }
+  
+      setIsOpen(true);                   // utilisateur authentifié → recorder
+    };
 
   // Reset recorder state
   const resetRecorder = () => {
@@ -156,8 +165,9 @@ export function InlineNodeRecorder({
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
-        className="w-10 h-10 flex items-center justify-center bg-yellow-700 hover:bg-yellow-600 text-white"
+        onClick={handleOpenRecorder}    // <-- ⬅️  remplace setIsOpen(true)
+        className="w-10 h-10 flex items-center justify-center
+                   bg-yellow-700 hover:bg-yellow-600 text-white"
       >
         <Plus size={18} />
       </button>

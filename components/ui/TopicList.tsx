@@ -1,6 +1,3 @@
-// ===============================
-// File: components/ui/TopicList.tsx (corrected build‑able version)
-// ===============================
 "use client";
 
 import React, { useState } from "react";
@@ -25,9 +22,6 @@ interface TopicListProps {
   topics: Topic[];
 }
 
-// ────────────────────────────────────────────────────────────
-// Internal modal component
-// ────────────────────────────────────────────────────────────
 function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
   if (!open) return null;
   return (
@@ -46,9 +40,6 @@ function Modal({ open, onClose, children }: { open: boolean; onClose: () => void
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// Main component
-// ────────────────────────────────────────────────────────────
 export default function TopicList({ topics }: TopicListProps) {
   const router = useRouter();
 
@@ -65,6 +56,8 @@ export default function TopicList({ topics }: TopicListProps) {
   const [bpm, setBpm] = useState(120);
   const [clickTimes, setClickTimes] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+
+  console.log("TOPICS RECEIVED:", topics);
 
   // ─── Helpers ───
   const filters = [

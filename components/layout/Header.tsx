@@ -39,8 +39,13 @@ export function Header() {
             <Image
               src="/logoTitle.png"
               alt="Logo Druide500"
-              width={250}
-              height={150} />
+              width={150}
+              height={50} />
+            <Image
+              src="/logoFj.png"
+              alt="Logo"
+              width={90}
+              height={50} />
           </Link>
 
           <div className="flex items-center p-2">

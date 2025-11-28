@@ -13,10 +13,12 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
-
+import { getBranchFrom } from "@/lib/audioUtils";
 import { NodeCard } from "./NodeCard";
 import { InlineNodeRecorder } from "@/components/ui/inlineNodeRecorder";
 import type { Node } from "@/lib/supabase";
+import { useReactFlow } from "reactflow";
+
 
 // ────────────────────────────────────────────────────────────────────────────
 // Layout & style constants
@@ -55,19 +57,30 @@ function MusicNode({ data }: any) {
 // Custom React‑Flow node: PlusNode (visual only – invokes InlineNodeRecorder)
 // ────────────────────────────────────────────────────────────────────────────
 function PlusNode({ data }: any) {
-  const { parentId, topicId, bpm, userId, refreshNodes } = data;
+  const {
+    parentId,
+    topicId,
+    bpm,
+    userId,
+    refreshNodes,
+    disableGraph,
+    enableGraph
+  } = data;
 
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} id="pt" style={{ opacity: 0, width: 1, height: 1 }} />
 
-      <InlineNodeRecorder
-        parentId={parentId}
-        topicId={topicId}
-        bpm={bpm}
-        userId={userId}
-        refreshNodes={refreshNodes}
-      />
+<InlineNodeRecorder
+  parentId={parentId}
+  topicId={topicId}
+  bpm={bpm}
+  userId={userId}
+  refreshNodes={refreshNodes}
+  branchNodes={getBranchFrom(data.allNodes, parentId) || []}
+  disableGraph={disableGraph}
+  enableGraph={enableGraph}
+/>
 
       <Handle type="source" position={Position.Right} id="ps" style={{ opacity: 0, width: 1, height: 1 }} />
     </div>
@@ -87,6 +100,15 @@ interface NodeGraphProps {
 }
 
 function NodeGraphComponent({ nodes, topic, user, onNodeSelect, onAddChild, refreshNodes }: NodeGraphProps) {
+    const [interactionEnabled, setInteractionEnabled] = useState(true);
+
+  function disableGraphInteraction() {
+    setInteractionEnabled(false);
+  }
+
+  function enableGraphInteraction() {
+    setInteractionEnabled(true);
+  }
   // internal React‑Flow state helpers
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<RFNode[]>([]);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<RFEdge[]>([]);
@@ -173,13 +195,16 @@ graphNodes.push({
         type: "plus",
         position: { x: x + H_SPACING, y: plusY },
         draggable: false,
-        data: {
-          parentId: id,
-          topicId: topic.id,
-          bpm: topic.bpm,
-          userId: user?.id ?? "anonymous",
-          refreshNodes,
-        },
+data: {
+  parentId: id,
+  topicId: topic.id,
+  bpm: topic.bpm,
+  userId: user?.id ?? "anonymous",
+  refreshNodes,
+  allNodes: nodes,
+  disableGraph: disableGraphInteraction,
+  enableGraph: enableGraphInteraction,
+},
       });
 
       // 4. edges from parent → each item (child + plus)
@@ -207,21 +232,21 @@ graphNodes.push({
   return (
     <ReactFlowProvider>
       <div className="w-full h-full">
-        <ReactFlow
-          nodes={rfNodes}
-          edges={rfEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={(_, n) => {
-            if (n.type === "music") onNodeSelect((n.data as any).node);
-          }}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={{ type: "smoothstep", style: EDGE_STYLE }}
-          nodesDraggable={false}
-          panOnDrag
-          zoomOnScroll
-          fitView
-        >
+<ReactFlow
+  nodes={rfNodes}
+  edges={rfEdges}
+  onNodesChange={onNodesChange}
+  onEdgesChange={onEdgesChange}
+  onNodeClick={(_, n) => {
+    if (n.type === "music") onNodeSelect((n.data as any).node);
+  }}
+  nodeTypes={nodeTypes}
+  defaultEdgeOptions={{ type: "smoothstep", style: EDGE_STYLE }}
+  nodesDraggable={false}
+  panOnDrag={interactionEnabled}
+  zoomOnScroll={interactionEnabled}
+  fitView
+>
           <div className="absolute right-0 bottom-0 z-10">
             <Controls />
           </div>

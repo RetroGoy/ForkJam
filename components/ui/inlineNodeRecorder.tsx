@@ -1,12 +1,39 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Plus, Save, X, Mic, Square, Loader2 } from "lucide-react";
-import { AudioRecorder } from "@/lib/audioRecorder";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  MouseEvent,
+  ChangeEvent,
+} from "react";
+import {
+  Plus,
+  Save,
+  X,
+  Mic,
+  Square,
+  Loader2,
+  Play,
+  VolumeX,
+  Volume2,
+  SlidersHorizontal,
+  Timer,
+  Music2,
+} from "lucide-react";
+import WaveSurfer from "wavesurfer.js";
+import toast from "react-hot-toast";
+
+import { supabase } from "@/lib/supabase";
 import { uploadAudioToSupabase } from "@/lib/uploadAudioToSupabase";
 import { createNode } from "@/lib/createNode";
-import toast from "react-hot-toast";     
-import { supabase } from "@/lib/supabase";  
+import { createMetronome } from "@/lib/metronome";
+import { useAudioStore } from "@/store/useAudioStore";
+import { getNodeColor } from "@/lib/getNodeColor";
+import { TrackWaveform } from "@/components/ui/TrackWaveform";
+import type { Node } from "@/lib/supabase";
+
+type RecorderMode = "idle" | "recording" | "editing";
 
 interface InlineNodeRecorderProps {
   parentId: string;
@@ -14,189 +41,827 @@ interface InlineNodeRecorderProps {
   userId: string;
   bpm: number;
   refreshNodes: () => void;
+  branchNodes: Node[];
+  disableGraph: () => void;
+  enableGraph: () => void;
 }
 
+// Small helper: format seconds as mm:ss
+const formatTime = (seconds: number) => {
+  const s = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+};
+
+/**
+ * Hook: audio input devices (mic / USB / soundcard).
+ */
+function useInputDevices() {
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [hasPermission, setHasPermission] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const init = async () => {
+      if (typeof navigator === "undefined" || !navigator.mediaDevices) return;
+
+      try {
+        // request temp access so enumerateDevices returns full list
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setHasPermission(true);
+        const list = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = list.filter((d) => d.kind === "audioinput");
+        if (!mounted) return;
+
+        setDevices(audioInputs);
+        if (audioInputs.length > 0) {
+          setSelectedId(audioInputs[0].deviceId);
+        }
+
+        // stop temp tracks
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (err) {
+        console.error("Error listing audio devices", err);
+        setHasPermission(false);
+      }
+    };
+
+    init();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleSelect = (id: string) => setSelectedId(id || undefined);
+
+  return {
+    devices,
+    selectedId,
+    hasPermission,
+    setSelectedId: handleSelect,
+  };
+}
+
+/**
+ * Hook: simple metronome at given BPM with start/stop + pre-roll helper.
+ */
+function useMetronome(bpm: number) {
+  const metroRef = useRef<ReturnType<typeof createMetronome> | null>(null);
+  const intervalIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    metroRef.current = createMetronome(bpm);
+    return () => {
+      if (intervalIdRef.current && metroRef.current) {
+        metroRef.current.stop(intervalIdRef.current);
+      }
+    };
+  }, [bpm]);
+
+  const startSimple = (onBeat?: (beat: number) => void) => {
+    if (!metroRef.current) return null;
+    const id = metroRef.current.start(onBeat);
+    intervalIdRef.current = id;
+    return id;
+  };
+
+  const stop = () => {
+    if (intervalIdRef.current && metroRef.current) {
+      metroRef.current.stop(intervalIdRef.current);
+      intervalIdRef.current = null;
+    }
+  };
+
+  const startPreRoll = async (
+    beats: number,
+    onUpdate: (beat: number) => void,
+    onDone: () => void
+  ) => {
+    if (!metroRef.current) {
+      onDone();
+      return;
+    }
+
+    let count = 0;
+    const id = metroRef.current.start((beat) => {
+      count += 1;
+      onUpdate(beat);
+      if (count >= beats) {
+        metroRef.current!.stop(id);
+        onDone();
+      }
+    });
+  };
+
+  return { startSimple, stop, startPreRoll };
+}
+
+/**
+ * Main InlineNodeRecorder: mini DAW-like inline recorder + editor.
+ */
 export function InlineNodeRecorder({
   parentId,
   topicId,
   userId,
   bpm,
   refreshNodes,
+  branchNodes = [],
+  disableGraph,
+  enableGraph,
 }: InlineNodeRecorderProps) {
+  // ---- UI & auth gate ----
   const [isOpen, setIsOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [instrument, setInstrument] = useState("");
-  const [gain, setGain] = useState(1);
-
-  const [recorder] = useState(() => new AudioRecorder());
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [blob, setBlob] = useState<Blob | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const MAX_DURATION = 180;    
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const visualizerRef = useRef<number | null>(null);
-  
   const [isClient, setIsClient] = useState(false);
 
-useEffect(() => {
-  setIsClient(true);
-}, []);
+  const [title, setTitle] = useState("");
+  const [instrument, setInstrument] = useState("");
 
-if (!isClient) return null;
-  
-  // Handle start recording
-  const handleRecord = async () => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    toast.error("Micro non disponible");
-    return;
-  }
+  const [mode, setMode] = useState<RecorderMode>("idle");
 
-    const permission = await recorder.requestPermission();
-    if (!permission) return;
-  
-    await recorder.start();
-    setIsRecording(true);
-    setElapsedTime(0);
-    startTimer();          // <-- n’oublie pas
-    startVisualizer();
-  };
-  
+  // ---- existing branch playback via central audio store ----
+  const playBranch = useAudioStore((s) => s.playBranch);
+  const stopAllNodes = useAudioStore((s) => s.stopAllNodes);
+  const playingNodes = useAudioStore((s) => s.playingNodes);
+  const setGain = useAudioStore((s) => s.setGain);
 
-  // Handle stop recording
-  const handleStop = async () => {
-    const data = await recorder.stop();
-    setAudioUrl(data.url);
-    setBlob(data.blob);
-    setIsRecording(false);
-    stopTimer();
-    stopVisualizer();
-  };
+  // branch waveforms
+  const branchWaveformsRef = useRef<Map<string, WaveSurfer>>(new Map());
+  const branchDurationsRef = useRef<Record<string, number>>({});
+  const [muted, setMuted] = useState<Record<string, boolean>>({});
 
- const handleSave = async () => {
-  setIsLoading(true);
+  // ---- recording (raw take) ----
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordStartTimeRef = useRef<number>(0);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    toast.error("You must be logged in to create a node");
-    setIsLoading(false);
-    return;
-  }
+  const [takeBlob, setTakeBlob] = useState<Blob | null>(null);
+  const [takeUrl, setTakeUrl] = useState<string | null>(null);
+  const [takeDuration, setTakeDuration] = useState<number>(0);
 
-  if (!title || !instrument || !blob) {
-    toast.error("Missing fields");
-    setIsLoading(false);
-    return;
-  }
+  // ---- editing: trim / loop / gain ----
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
+  const [loopEnabled, setLoopEnabled] = useState(false);
+  const [recGain, setRecGain] = useState(1);
 
-  // 1. upload audio
-  const audio_url = await uploadAudioToSupabase(blob);
-  if (!audio_url) {
-    toast.error("Upload failed");
-    setIsLoading(false);
-    return;
-  }
+  // ---- mini timeline (common) ----
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const cursorRef = useRef<HTMLDivElement | null>(null);
 
-  // 2. create node
-  const newNode = await createNode({
-    title,
-    instrument,
-    audio_url,
-    topic_id: topicId,
-    parent_node_id: parentId,
-    user_id: user.id,       
-  });
+  const [isPreRoll, setIsPreRoll] = useState(false);
+  const [preRollBeat, setPreRollBeat] = useState<number | null>(null);
 
-  if (!newNode) {
-    toast.error("Error saving node");
-  } else {
-    toast.success("Node created!");
-    refreshNodes();
-    resetRecorder();
-  }
+  // rec waveform
+  const recWaveformRef = useRef<WaveSurfer | null>(null);
+  const recWaveContainerRef = useRef<HTMLDivElement | null>(null);
 
-  setIsLoading(false);
-};
+  // playback of REC (with FX)
+  const recAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const distortionNodeRef = useRef<WaveShaperNode | null>(null);
+  const lowpassNodeRef = useRef<BiquadFilterNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
 
-    /* ✅ nouveau handler pour le bouton « + » */
-    const handleOpenRecorder = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-  
-      if (!user) {
-        toast.error("Connecte‑toi pour ajouter un node ✨");
-        return;                          // on s’arrête là, rien ne s’ouvre
+  // FX
+  const [distortionEnabled, setDistortionEnabled] = useState(false);
+  const [lowpassEnabled, setLowpassEnabled] = useState(false);
+
+  // timers / RAF
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const MAX_DURATION = 180; // seconds
+
+  const { devices, selectedId, hasPermission, setSelectedId } = useInputDevices();
+  const { startSimple, stop: stopMetronome, startPreRoll } = useMetronome(bpm);
+
+  // ---- SSR guard ----
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // ---- INIT BRANCH WAVEFORMS ----
+  useEffect(() => {
+    if (!isClient) return;
+    if (branchNodes.length === 0) return;
+
+    const waveMap = branchWaveformsRef.current;
+    waveMap.forEach((wf) => wf.destroy());
+    waveMap.clear();
+    branchDurationsRef.current = {};
+    setDuration(0);
+
+    // allow DOM to mount containers
+    const timeout = setTimeout(() => {
+      branchNodes.forEach((node) => {
+        if (!node.audio_url) return;
+        const container = document.getElementById(`inline-rec-wave-${node.id}`);
+        if (!container) return;
+
+        const wf = WaveSurfer.create({
+          container,
+          waveColor: getNodeColor(node.instrument),
+          progressColor: "#ffffff",
+          barWidth: 2,
+          height: 32,
+        });
+
+        wf.load(node.audio_url);
+
+        wf.on("ready", () => {
+          const d = wf.getDuration();
+          branchDurationsRef.current[node.id] = d;
+          setDuration((prev) => Math.max(prev, d, takeDuration));
+        });
+
+        waveMap.set(node.id, wf);
+      });
+    }, 120);
+
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchNodes, isClient]);
+
+  // ---- INIT REC WAVEFORM WHEN TAKE AVAILABLE ----
+  useEffect(() => {
+    if (!isClient) return;
+    if (!takeUrl || !recWaveContainerRef.current) return;
+
+    if (recWaveformRef.current) {
+      recWaveformRef.current.destroy();
+      recWaveformRef.current = null;
+    }
+
+    const wf = WaveSurfer.create({
+      container: recWaveContainerRef.current,
+      waveColor: "#fbbf24",
+      progressColor: "#ffffff",
+      barWidth: 2,
+      height: 40,
+    });
+
+    wf.load(takeUrl);
+
+    wf.on("ready", () => {
+      const d = wf.getDuration();
+      setTakeDuration(d);
+      setTrimStart(0);
+      setTrimEnd(d);
+      setDuration((prev) => Math.max(prev, d, ...Object.values(branchDurationsRef.current)));
+    });
+
+    recWaveformRef.current = wf;
+
+    return () => {
+      wf.destroy();
+      recWaveformRef.current = null;
+    };
+  }, [takeUrl, isClient]);
+
+  // ---- MASTER TICK: drives cursor + waveforms while playing ----
+  useEffect(() => {
+    if (!isClient) return;
+
+    const tick = () => {
+      const branchAudios: HTMLAudioElement[] = [];
+      branchNodes.forEach((n) => {
+        const a = playingNodes.get(n.id);
+        if (a) branchAudios.push(a);
+      });
+
+      const recAudio = recAudioRef.current;
+
+      const active =
+        branchAudios.length > 0 || (!!recAudio && !recAudio.paused && !recAudio.ended);
+
+      setIsPlaying(active);
+
+      if (active) {
+        const times = branchAudios.map((a) => a.currentTime || 0);
+        const durs = branchAudios.map((a) => a.duration || 0);
+
+        if (recAudio) {
+          times.push(recAudio.currentTime + trimStart);
+          durs.push(trimEnd || recAudio.duration || 0);
+        }
+
+        const maxT = Math.max(...times, 0);
+        const maxD = Math.max(duration || 0, ...durs, 0.001);
+
+        setCurrent(maxT);
+        const p = Math.min(maxT / maxD, 1);
+
+        // cursor
+        if (timelineRef.current && cursorRef.current) {
+          const W = timelineRef.current.clientWidth;
+          cursorRef.current.style.transform = `translateX(${W * p}px)`;
+        }
+
+        // waveforms
+        branchWaveformsRef.current.forEach((wf) => wf.seekTo(p));
+        if (recWaveformRef.current) {
+          const relTime = Math.min(Math.max(maxT - trimStart, 0), trimEnd - trimStart);
+          const relP = (relTime || 0) / ((trimEnd - trimStart) || 0.001);
+          recWaveformRef.current.seekTo(Math.min(1, Math.max(0, relP)));
+        }
+
+        // loop logic
+        if (loopEnabled && recAudio) {
+          const absTime = trimStart + recAudio.currentTime;
+          if (absTime >= trimEnd - 0.03) {
+            recAudio.currentTime = 0;
+            // restart branch for "context" loop
+            stopAllNodes();
+            playBranch(branchNodes);
+          }
+        }
       }
-  
-      setIsOpen(true);                   // utilisateur authentifié → recorder
+
+      rafRef.current = requestAnimationFrame(tick);
     };
 
-  // Reset recorder state
-  const resetRecorder = () => {
-    setIsOpen(false);
-    setAudioUrl(null);
-    setBlob(null);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchNodes, playingNodes, duration, trimStart, trimEnd, loopEnabled, isClient]);
+
+  // ---- input device & metronome hooks already initialized above ----
+
+  // ---- helpers: reset / cleanup ----
+  const resetRecordingState = () => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current) {
+      try {
+        if (mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (e) {
+        // ignore
+      }
+      mediaRecorderRef.current = null;
+    }
+    setIsRecording(false);
+    setIsPreRoll(false);
+    setPreRollBeat(null);
+  };
+
+  const resetRecAudioGraph = () => {
+    try {
+      recAudioRef.current?.pause();
+      recAudioRef.current = null;
+    } catch (_) {
+      // ignore
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    sourceNodeRef.current = null;
+    distortionNodeRef.current = null;
+    lowpassNodeRef.current = null;
+    gainNodeRef.current = null;
+  };
+
+  const fullReset = () => {
+    stopMetronome();
+    resetRecordingState();
+    resetRecAudioGraph();
+    stopAllNodes();
+
+    branchWaveformsRef.current.forEach((wf) => wf.destroy());
+    branchWaveformsRef.current.clear();
+    branchDurationsRef.current = {};
+
+    if (recWaveformRef.current) {
+      recWaveformRef.current.destroy();
+      recWaveformRef.current = null;
+    }
+
+    if (takeUrl) URL.revokeObjectURL(takeUrl);
+
     setTitle("");
     setInstrument("");
-    setGain(1);
-    setElapsedTime(0);
-    setIsRecording(false);
-    stopTimer();
-    stopVisualizer();
+    setTakeBlob(null);
+    setTakeUrl(null);
+    setTakeDuration(0);
+    setTrimStart(0);
+    setTrimEnd(0);
+    setLoopEnabled(false);
+    setRecGain(1);
+    setMuted({});
+    setDistortionEnabled(false);
+    setLowpassEnabled(false);
+    setDuration(0);
+    setCurrent(0);
+    setMode("idle");
+    setIsOpen(false);
   };
 
-  const startTimer = () => {
-    timerRef.current = setInterval(() => {
-      setElapsedTime(prev => {
-        if (prev + 1 >= MAX_DURATION) handleStop();     // auto‑stop
-        return prev + 1;
+  useEffect(() => {
+    return () => {
+      fullReset();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- FX audio graph ----
+  const ensureRecAudioGraph = () => {
+    if (!takeUrl) return;
+
+    if (!recAudioRef.current) {
+      recAudioRef.current = new Audio(takeUrl);
+      recAudioRef.current.loop = false;
+    }
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+
+    const audioCtx = audioContextRef.current;
+
+    if (!sourceNodeRef.current) {
+      sourceNodeRef.current = audioCtx.createMediaElementSource(recAudioRef.current);
+    }
+
+    if (!distortionNodeRef.current) {
+      distortionNodeRef.current = audioCtx.createWaveShaper();
+    }
+    if (!lowpassNodeRef.current) {
+      lowpassNodeRef.current = audioCtx.createBiquadFilter();
+      lowpassNodeRef.current.type = "lowpass";
+    }
+    if (!gainNodeRef.current) {
+      gainNodeRef.current = audioCtx.createGain();
+    }
+
+    // simple chain: source -> distortion -> lowpass -> gain -> destination
+    sourceNodeRef.current.disconnect();
+    distortionNodeRef.current.disconnect();
+    lowpassNodeRef.current.disconnect();
+    gainNodeRef.current.disconnect();
+
+    sourceNodeRef.current
+      .connect(distortionNodeRef.current)
+      .connect(lowpassNodeRef.current)
+      .connect(gainNodeRef.current)
+      .connect(audioCtx.destination);
+
+    // parameters
+    const makeDistortionCurve = (amount: number) => {
+      const k = typeof amount === "number" ? amount : 0;
+      const n = 44100;
+      const curve = new Float32Array(n);
+      const deg = Math.PI / 180;
+      let i = 0;
+      let x: number;
+      for (; i < n; ++i) {
+        x = (i * 2) / n - 1;
+        curve[i] =
+          ((3 + k) * x * 20 * deg) /
+          (Math.PI + k * Math.abs(x));
+      }
+      return curve;
+    };
+
+    if (distortionNodeRef.current) {
+      if (distortionEnabled) {
+        distortionNodeRef.current.curve = makeDistortionCurve(400);
+        distortionNodeRef.current.oversample = "4x";
+      } else {
+        distortionNodeRef.current.curve = null;
+      }
+    }
+
+    if (lowpassNodeRef.current) {
+      if (lowpassEnabled) {
+        lowpassNodeRef.current.frequency.value = 2000;
+      } else {
+        lowpassNodeRef.current.frequency.value = 20000;
+      }
+    }
+
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = recGain;
+    }
+  };
+
+  // update FX graph whenever toggles / gain change
+  useEffect(() => {
+    ensureRecAudioGraph();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distortionEnabled, lowpassEnabled, recGain, takeUrl]);
+
+  // ---- mute / gain for existing tracks ----
+  const applyVolumeRules = () => {
+    branchNodes.forEach((n) => {
+      const v = muted[n.id] ? 0 : 1;
+      setGain(n.id, v);
+    });
+  };
+
+  const toggleMute = (id: string) => {
+    setMuted((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      return next;
+    });
+    setTimeout(applyVolumeRules, 0);
+  };
+
+  // ---- play / stop timeline in EDITING mode ----
+  const handlePlay = () => {
+    if (!takeUrl) {
+      // just play branch as reference
+      stopAllNodes();
+      playBranch(branchNodes);
+      return;
+    }
+
+    ensureRecAudioGraph();
+    if (!recAudioRef.current) return;
+
+    // reset everything
+    stopAllNodes();
+    recAudioRef.current.pause();
+    recAudioRef.current.currentTime = 0;
+
+    // start branch from beginning
+    playBranch(branchNodes);
+
+    // start rec from trimStart
+    const startOffset = 0; // we always start the audio element at 0
+    recAudioRef.current.currentTime = startOffset;
+    recAudioRef.current.play().catch((err) => {
+      console.error("Error playing take", err);
+    });
+
+    setIsPlaying(true);
+  };
+
+  const handleStop = () => {
+    stopAllNodes();
+    if (recAudioRef.current) {
+      recAudioRef.current.pause();
+      recAudioRef.current.currentTime = 0;
+    }
+    setIsPlaying(false);
+  };
+
+  // ---- timeline click (scrub) ----
+  const handleTimelineClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current || duration <= 0) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const p = (e.clientX - rect.left) / rect.width;
+    const t = p * duration;
+
+    setCurrent(t);
+
+    // branch waveforms
+    branchWaveformsRef.current.forEach((wf) => wf.seekTo(p));
+    // rec waveform
+    if (recWaveformRef.current) {
+      const relTime = Math.min(Math.max(t - trimStart, 0), trimEnd - trimStart);
+      const relP = relTime / ((trimEnd - trimStart) || 0.001);
+      recWaveformRef.current.seekTo(relP);
+    }
+
+    // if playing, seek underlying audio elements as well
+    if (isPlaying) {
+      branchNodes.forEach((n) => {
+        const a = playingNodes.get(n.id);
+        if (a) {
+          a.currentTime = Math.min(Math.max(t, 0), a.duration || t);
+        }
       });
+      if (recAudioRef.current) {
+        const rel = Math.min(Math.max(t - trimStart, 0), (trimEnd - trimStart) || t);
+        recAudioRef.current.currentTime = rel;
+      }
+    }
+  };
+
+  // ---- record logic ----
+  const startRecordTimer = () => {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    let elapsed = 0;
+    recordTimerRef.current = setInterval(() => {
+      elapsed += 1;
+      setCurrent(elapsed);
+      if (elapsed >= MAX_DURATION) {
+        handleStopRecording();
+      }
     }, 1000);
   };
-  
-  const stopTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+
+  const handleStartRecordingAfterPreRoll = async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+      toast.error("Micro non disponible");
+      return;
+    }
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: selectedId
+          ? { deviceId: { exact: selectedId } }
+          : true,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+        audioBitsPerSecond: 128000,
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      recordChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const duration =
+          (Date.now() - recordStartTimeRef.current) / 1000;
+        const blob = new Blob(recordChunksRef.current, {
+          type: "audio/webm",
+        });
+        const url = URL.createObjectURL(blob);
+
+        setTakeBlob(blob);
+        setTakeUrl(url);
+        setTakeDuration(duration);
+        setTrimStart(0);
+        setTrimEnd(duration);
+        setMode("editing");
+        setIsRecording(false);
+        setIsPreRoll(false);
+        setPreRollBeat(null);
+        stopMetronome();
+        stopAllNodes();
+        if (recordTimerRef.current) {
+          clearInterval(recordTimerRef.current);
+          recordTimerRef.current = null;
+        }
+      };
+
+      recordStartTimeRef.current = Date.now();
+      mediaRecorder.start();
+      setIsRecording(true);
+      setMode("recording");
+      setCurrent(0);
+      startRecordTimer();
+
+      // play branch during recording
+      stopAllNodes();
+      playBranch(branchNodes);
+    } catch (err) {
+      console.error("Error starting recording", err);
+      toast.error("Erreur en démarrant l'enregistrement");
+      setIsRecording(false);
+      setIsPreRoll(false);
+    }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  const handleStartRecording = async () => {
+    if (!hasPermission) {
+      toast.error("Autorise le micro pour enregistrer");
+      return;
+    }
 
-  // Visualizer functions
-  const startVisualizer = () => {
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext("2d");
-    if (!ctx) return;
+    setMode("recording");
+    setIsPreRoll(true);
+    setPreRollBeat(null);
+    setCurrent(0);
 
-    const draw = () => {
-      ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
-      const bars = 20;
-      const barWidth = (canvasRef.current!.width / bars) - 2;
-      for (let i = 0; i < bars; i++) {
-        const barHeight = Math.random() * canvasRef.current!.height;
-        ctx.fillStyle = "#ef4444"; // Red
-        ctx.fillRect(i * (barWidth + 2), canvasRef.current!.height - barHeight, barWidth, barHeight);
+    // pre-roll 4 temps
+    startPreRoll(
+      4,
+      (beat) => {
+        setPreRollBeat(beat);
+      },
+      () => {
+        setPreRollBeat(null);
+        setIsPreRoll(false);
+        handleStartRecordingAfterPreRoll();
       }
-      visualizerRef.current = requestAnimationFrame(draw);
-    };
-    draw();
+    );
   };
 
-  const stopVisualizer = () => {
-    if (visualizerRef.current) cancelAnimationFrame(visualizerRef.current);
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream
+        .getTracks()
+        .forEach((t) => t.stop());
+    }
   };
 
-  // UI
+  // ---- save node ----
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!takeBlob || !takeUrl) {
+      toast.error("Pas de prise enregistrée");
+      return;
+    }
+    if (!title || !instrument) {
+      toast.error("Titre et instrument requis");
+      return;
+    }
+
+    setIsSaving(true);
+
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+    if (!user) {
+      toast.error("Tu dois être connecté pour créer un node");
+      setIsSaving(false);
+      return;
+    }
+
+    try {
+      const audio_url = await uploadAudioToSupabase(takeBlob);
+      if (!audio_url) {
+        toast.error("Échec de l'upload");
+        setIsSaving(false);
+        return;
+      }
+
+      const payload: any = {
+        title,
+        instrument,
+        audio_url,
+        topic_id: topicId,
+        parent_node_id: parentId,
+        user_id: user.id,
+        trim_start: trimStart,
+        trim_end: trimEnd,
+        gain: recGain,
+        has_distortion: distortionEnabled,
+        has_lowpass: lowpassEnabled,
+      };
+
+      const newNode = await createNode(payload);
+      if (!newNode) {
+        toast.error("Erreur lors de la création du node");
+      } else {
+        toast.success("Node créé !");
+        await refreshNodes();
+        fullReset();
+      }
+    } catch (err) {
+      console.error("Error saving node", err);
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ---- open recorder (auth gate) ----
+  const handleOpenRecorder = async () => {
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+    if (!user) {
+      toast.error("Connecte-toi pour ajouter un node ✨");
+      return;
+    }
+    setIsOpen(true);
+  };
+
+  // ---- trim sliders ----
+  const handleTrimStartChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const v = parseFloat(e.target.value);
+    if (v >= trimEnd) return;
+    setTrimStart(v);
+  };
+
+  const handleTrimEndChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const v = parseFloat(e.target.value);
+    if (v <= trimStart) return;
+    setTrimEnd(v);
+  };
+
+  if (!isClient) return null;
+
+  // ---- collapsed "+" button ----
   if (!isOpen) {
     return (
       <button
-        onClick={handleOpenRecorder}    // <-- ⬅️  remplace setIsOpen(true)
+        onClick={handleOpenRecorder}
         className="w-10 h-10 flex items-center justify-center
-                   bg-yellow-700 hover:bg-yellow-600 text-white"
+                   bg-yellow-700 hover:bg-yellow-600 text-white rounded-sm"
       >
         <Plus size={18} />
       </button>
@@ -204,77 +869,321 @@ if (!isClient) return null;
   }
 
   return (
-    <div className="p-4 bg-gray-800 border border-yellow-900/50 space-y-4">
-      <div className="flex justify-between">
-        <h3 className="text-yellow-400 font-bold">Add Node</h3>
-        <button onClick={resetRecorder} className="text-red-400 hover:text-red-300">
+    <div className="w-full max-w-3xl mt-2 rounded-md border border-yellow-900/60 bg-black/80 text-gray-100 p-4 space-y-4">
+<div onMouseEnter={disableGraph} onMouseLeave={enableGraph}>
+      {/* HEADER */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <Music2 className="text-yellow-400" size={18} />
+          <span className="font-semibold text-yellow-200">
+            Nouvelle prise — mini éditeur
+          </span>
+        </div>
+        <button
+          onClick={fullReset}
+          className="text-red-400 hover:text-red-300"
+        >
           <X size={18} />
         </button>
       </div>
 
-      {/* Title & Instrument */}
-      <input
-        placeholder="Title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        className="w-full px-3 py-2 bg-gray-700 rounded-md text-sm"
-      />
-      <input
-        placeholder="Instrument"
-        value={instrument}
-        onChange={(e) => setInstrument(e.target.value)}
-        className="w-full px-3 py-2 bg-gray-700 rounded-md text-sm"
-      />
-
-      {/* Visualizer Canvas */}
-      <canvas
-        ref={canvasRef}
-        width={300}
-        height={50}
-        className="w-full bg-black/50 rounded-md"
-      />
-
-      {/* Timer */}
-      <div className="text-center text-yellow-300 font-mono">
-        {formatTime(elapsedTime)}
+      {/* TITLE + INSTRUMENT */}
+      <div className="flex flex-col md:flex-row gap-3">
+        <input
+          placeholder="Titre de la prise"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+        />
+        <input
+          placeholder="Instrument (ex: guitare, voix...)"
+          value={instrument}
+          onChange={(e) => setInstrument(e.target.value)}
+          className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+        />
       </div>
 
-      {/* Recorder Buttons */}
-      <div className="flex gap-3">
-        {!audioUrl && !isRecording && (
-          <button
-            onClick={handleRecord}
-            className="flex-1 bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-md"
+      {/* INPUT SELECTION + METRONOME / BPM */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between text-xs text-gray-300">
+        <div className="flex items-center gap-2 w-full md:w-2/3">
+          <span className="whitespace-nowrap">Entrée audio :</span>
+          <select
+            value={selectedId ?? ""}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="flex-1 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs"
           >
-            <Mic size={18} /> Start
-          </button>
-        )}
-        {isRecording && (
-          <button
-            onClick={handleStop}
-            className="flex-1 bg-yellow-700 hover:bg-yellow-800 text-white px-4 py-2 rounded-md"
+            {devices.length === 0 && (
+              <option value="">(aucun micro détecté)</option>
+            )}
+            {devices.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || d.deviceId || "Input audio"}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <Timer size={14} />
+            <span>{formatTime(current)} / {formatTime(duration)}</span>
+          </div>
+          <div className="text-yellow-300 text-xs">
+            {bpm} BPM
+          </div>
+        </div>
+      </div>
+
+      {/* BRANCH TRACKS (context) */}
+      <div className="space-y-2 border border-gray-800 bg-black/40 rounded-md p-2">
+        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+          <span>Pistes existantes de la branche</span>
+          <span>{branchNodes.length} piste(s)</span>
+        </div>
+        {branchNodes.map((node) => (
+          <div
+            key={node.id}
+            className="flex items-center gap-2 text-xs"
           >
-            <Square size={18} /> Stop
-          </button>
+            <button
+              onClick={() => toggleMute(node.id)}
+              className="w-6 h-6 flex items-center justify-center rounded bg-gray-900 border border-gray-700"
+            >
+              {muted[node.id] ? (
+                <VolumeX size={14} className="text-red-400" />
+              ) : (
+                <Volume2 size={14} className="text-green-400" />
+              )}
+            </button>
+            <div className="flex-1">
+              <TrackWaveform
+                url={node.audio_url}
+                color={getNodeColor(node.instrument)}
+                height={32}
+              />
+            </div>
+            <div
+              className="whitespace-nowrap text-right font-semibold min-w-[120px]"
+              style={{ color: getNodeColor(node.instrument) }}
+            >
+              {node.instrument} — {node.title}
+            </div>
+          </div>
+        ))}
+        {branchNodes.length === 0 && (
+          <div className="text-xs text-gray-500 italic">
+            Aucune piste dans cette branche pour le moment.
+          </div>
         )}
       </div>
 
-      {/* Audio Preview */}
-      {audioUrl && (
-        <audio controls src={audioUrl} className="w-full mt-4" />
-      )}
+      {/* TAKE TRACK + EDITOR */}
+      <div className="space-y-3 border border-yellow-800/60 bg-yellow-950/10 rounded-md p-3">
+        <div className="flex items-center justify-between text-xs text-yellow-200">
+          <span>Nouvelle piste (REC)</span>
+          {mode === "recording" && isPreRoll && (
+            <span className="text-red-400">
+              Pré-roll&nbsp;
+              {preRollBeat !== null ? `(${preRollBeat})` : ""}
+            </span>
+          )}
+          {mode === "recording" && !isPreRoll && (
+            <span className="text-green-400">Enregistrement en cours...</span>
+          )}
+          {mode === "editing" && (
+            <span className="text-green-300">
+              Mode édition — {formatTime(trimStart)} → {formatTime(trimEnd)}
+            </span>
+          )}
+        </div>
 
-      {/* Save Button */}
-      <button
-        onClick={handleSave}
-        disabled={isLoading || !audioUrl || !title || !instrument}
-        className="w-full flex items-center justify-center bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-md disabled:opacity-40"
+        {/* wave of take */}
+        <div className="w-full h-16 bg-black/70 rounded-sm overflow-hidden">
+          <div
+            ref={recWaveContainerRef}
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* TRIM CONTROLS */}
+        {takeUrl && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-gray-300">
+              <span>Trim début / fin</span>
+              <span>
+                {formatTime(trimStart)} → {formatTime(trimEnd)}{" "}
+                ({formatTime(trimEnd - trimStart)})
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <input
+                type="range"
+  onMouseDown={disableGraph}
+  onMouseUp={enableGraph}
+                min={0}
+                max={takeDuration || 0}
+                step={0.05}
+                value={trimStart}
+                onChange={handleTrimStartChange}
+                className="w-full"
+              />
+              <input
+                type="range"
+                min={0}
+                max={takeDuration || 0}
+                step={0.05}
+                value={trimEnd}
+                onChange={handleTrimEndChange}
+                className="w-full"
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs text-gray-300 mt-1">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={loopEnabled}
+                  onChange={(e) => setLoopEnabled(e.target.checked)}
+                  className="accent-yellow-400"
+                />
+                Boucler la sélection
+              </label>
+              <div className="flex items-center gap-2">
+                <span>Gain piste REC</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={recGain}
+                  onChange={(e) => setRecGain(parseFloat(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FX PANEL */}
+        {takeUrl && (
+          <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-300">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={14} />
+              <span className="text-gray-400">Effets (REC)</span>
+            </div>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={distortionEnabled}
+                onChange={(e) => setDistortionEnabled(e.target.checked)}
+                className="accent-yellow-400"
+              />
+              Distortion
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={lowpassEnabled}
+                onChange={(e) => setLowpassEnabled(e.target.checked)}
+                className="accent-yellow-400"
+              />
+              Low-pass
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* TIMELINE STRIP */}
+      <div
+        ref={timelineRef}
+        onClick={handleTimelineClick}
+        className="relative w-full h-10 bg-black/60 border border-gray-800 rounded-md overflow-hidden cursor-pointer"
       >
-        {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-        <span className="ml-2">Share</span>
-      </button>
+        {/* simple grid / beat markers */}
+        <div className="absolute inset-0 flex">
+          {Array.from({ length: 16 }).map((_, i) => (
+            <div
+              key={i}
+              className={`flex-1 border-r border-gray-800 ${
+                i % 4 === 0 ? "bg-gray-900/40" : ""
+              }`}
+            />
+          ))}
+        </div>
+        {/* cursor */}
+        <div
+          ref={cursorRef}
+          className="absolute top-0 bottom-0 w-[2px] bg-yellow-400 pointer-events-none"
+          style={{ transform: "translateX(0px)" }}
+        />
+      </div>
 
-      {/* FUTURE: Timeline, Loop, Trim sections to insert here! */}
+      {/* TRANSPORT + ACTIONS */}
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          {/* RECORD / STOP */}
+          {mode !== "editing" && !isRecording && (
+            <button
+              onClick={handleStartRecording}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-700 hover:bg-red-800 text-white text-sm font-medium"
+            >
+              <Mic size={16} />
+              <span>Record</span>
+            </button>
+          )}
+          {isRecording && (
+            <button
+              onClick={handleStopRecording}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-yellow-600 hover:bg-yellow-700 text-black text-sm font-medium"
+            >
+              <Square size={16} />
+              <span>Stop</span>
+            </button>
+          )}
+
+          {/* PLAY / STOP (context + take) */}
+          {mode === "editing" && (
+            <>
+              {!isPlaying ? (
+                <button
+                  onClick={handlePlay}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-800 text-white text-sm font-medium"
+                >
+                  <Play size={16} />
+                  <span>Play</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleStop}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium"
+                >
+                  <Square size={16} />
+                  <span>Stop</span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* SAVE */}
+        <button
+          onClick={handleSave}
+          disabled={
+            isSaving ||
+            !takeUrl ||
+            !title ||
+            !instrument ||
+            mode !== "editing"
+          }
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-yellow-600 hover:bg-yellow-500 text-black text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isSaving ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Save size={16} />
+          )}
+          <span>Share</span>
+        </button>
+      </div>
+    </div>
     </div>
   );
 }

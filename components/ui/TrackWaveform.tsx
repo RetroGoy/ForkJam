@@ -26,7 +26,6 @@ export function TrackWaveform({
       progressColor: "#fff",
       barWidth: 2,
       height,
-      responsive: true,
       interact: false,
     });
 
@@ -37,7 +36,7 @@ export function TrackWaveform({
     return () => {
       wf.destroy();
     };
-  }, [url]);
+  }, [url, color, height]);
 
   return <div ref={containerRef} className="w-full" />;
 }

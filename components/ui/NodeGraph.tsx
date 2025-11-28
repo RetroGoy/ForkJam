@@ -1,6 +1,3 @@
-// NodeGraph.tsx
-// Updated: Automatically displays a centered InlineNodeRecorder when the topic has no nodes.
-
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,12 +35,17 @@ const addEdge = (edges: RFEdge[], source: string, target: string) => {
 // Custom React‑Flow node: MusicNode (real DB record)
 // ────────────────────────────────────────────────────────────────────────────
 function MusicNode({ data }: any) {
-  const { node, allNodes, onAddChild } = data;
+  const { node, allNodes, onAddChild, onSelect } = data;
 
   return (
     <div className="relative group">
       <Handle type="target" position={Position.Left} id="t" style={{ opacity: 0, width: 7, height: 7 }} />
-      <NodeCard node={node} allNodes={allNodes} onAddChild={() => onAddChild(node)} />
+      <NodeCard
+        node={node}
+        allNodes={allNodes}
+        onAddChild={() => onAddChild(node)}
+        onSelect={onSelect}              // 🔹 important
+      />
       <Handle type="source" position={Position.Right} id="s" style={{ opacity: 0, width: 7, height: 7 }} />
     </div>
   );
@@ -145,13 +147,18 @@ function NodeGraphComponent({ nodes, topic, user, onNodeSelect, onAddChild, refr
       const x = level * H_SPACING;
       const baseY = order * V_SPACING - ((siblingCount - 1) * V_SPACING) / 2;
 
-      graphNodes.push({
-        id,
-        type: "music",
-        position: { x, y: baseY },
-        draggable: false,
-        data: { node: nodeMap.get(id), allNodes: nodes, onAddChild },
-      });
+graphNodes.push({
+  id,
+  type: "music",
+  position: { x, y: baseY },
+  draggable: false,
+  data: {
+    node: nodeMap.get(id),
+    allNodes: nodes,
+    onAddChild,
+    onSelect: onNodeSelect, 
+  },
+});
 
       // 2. fetch children & always append plus node id
       const children = childrenMap.get(id) ?? [];

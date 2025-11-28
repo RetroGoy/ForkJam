@@ -70,7 +70,7 @@ export async function getTopic(id: string): Promise<Topic | null> {
   return data;
 }
 
-export async function getNodesByTopic(topicId: string): Promise<Node[]> {
+export async function getNodesByTopic(topicId: string) {
   const { data, error } = await supabase
     .from('nodes')
     .select('*')
@@ -82,8 +82,16 @@ export async function getNodesByTopic(topicId: string): Promise<Node[]> {
     return [];
   }
 
-  return data || [];
+  return data;
 }
+
+export type NodeWithUser = Node & {
+  users?: {
+    id: string;
+    username: string;
+    email: string;
+  } | null;
+};
 
 export async function createNode(node: Omit<Node, 'id' | 'created_at'>): Promise<Node | null> {
   const { data, error } = await supabase

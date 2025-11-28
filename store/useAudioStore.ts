@@ -69,30 +69,38 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     }
   },
   
-  stopAllNodes: () => {
-    const { playingNodes } = get();
-    
-    playingNodes.forEach((audio) => {
-      audio.pause();
-      audio.currentTime = 0;
-    });
-    
-    set({ playingNodes: new Map() });
-  },
+stopAllNodes: () => {
+  const { playingNodes } = get();
+  playingNodes.forEach((audio) => {
+    audio.pause();
+    audio.currentTime = 0;
+  });
+  set({ playingNodes: new Map() });
+},
 
-  playBranch: (branch: Node[]) => {
-    const newMap = new Map(get().playingNodes);
-  
-    branch.forEach(node => {
-      const audio = new Audio(node.audio_url);
-      audio.loop = true;
-      audio.volume = 1;
-      audio.play().catch(err => console.error('Error playing audio:', err));
-      newMap.set(node.id, audio);
+playBranch: (branch: Node[]) => {
+  get().stopAllNodes();
+
+  const newMap = new Map<string, HTMLAudioElement>();
+
+  branch.forEach((node) => {
+    if (!node.audio_url) return;
+
+    const audio = new Audio(node.audio_url);
+    audio.loop = false;
+    audio.volume = 1;
+
+    audio.addEventListener("ended", () => {
+      newMap.delete(node.id);
+      set({ playingNodes: new Map(newMap) });
     });
-  
-    set({ playingNodes: newMap });
-  },
+
+    audio.play().catch((err) => console.error("Error playing audio:", err));
+    newMap.set(node.id, audio);
+  });
+
+  set({ playingNodes: new Map(newMap) });
+},
   
   setGain: (nodeId: string, gain: number) => {
     const { playingNodes } = get();

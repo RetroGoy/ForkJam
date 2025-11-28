@@ -1,33 +1,23 @@
-import { supabase } from './supabase';
+import { supabase } from "./supabase";
 
-export async function createNode({
-  title,
-  instrument,
-  bpm,
-  topic_id,
-  parent_node_id,
-  audio_url,
-  user_id,
-}: {
+export async function createNode(nodeData: {
   title: string;
   instrument: string;
-  bpm: number;
-  topic_id: string;
-  parent_node_id: string;
   audio_url: string;
+  topic_id: string;
+  parent_node_id: string | null;
   user_id: string;
 }) {
-  const { error } = await supabase.from('nodes').insert({
-    title,
-    instrument,
-    bpm,
-    topic_id,
-    parent_node_id,
-    audio_url,
-    user_id,
-  });
+  const { data, error } = await supabase
+    .from("nodes")
+    .insert(nodeData)
+    .select()
+    .single();
 
   if (error) {
-    console.error('Error creating node:', error);
+    console.error("Error inserting node:", error);
+    return null;
   }
+
+  return data;
 }

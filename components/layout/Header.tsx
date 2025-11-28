@@ -27,7 +27,7 @@ export function Header() {
     if (user) {
       router.push('/profile');
     } else {
-      router.push('/auth');
+      router.push('/auth/signin');
     }
   };
 

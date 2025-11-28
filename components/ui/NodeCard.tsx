@@ -2,21 +2,21 @@
 
 import React from 'react';
 import { Play, Pause, Plus } from 'lucide-react';
-import { Node } from '@/lib/supabase';
+import { NodeWithUser } from '@/lib/supabase';
 import { useAudioStore } from '@/store/useAudioStore';
 import { cn } from '@/lib/utils';
 import { getBranchFrom } from '@/lib/audioUtils';
 
 interface NodeCardProps {
-  node: Node;
+  node: NodeWithUser;
   isSelected?: boolean;
   onAddChild?: () => void;
-  allNodes: Node[]; 
+    onSelect?: (node: NodeWithUser) => void;
+  allNodes: NodeWithUser[];
 }
 
-export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: NodeCardProps) {
-  const { playBranch, stopAllNodes, playingNodes, playNode, stopNode } = useAudioStore();
-  
+export function NodeCard({ node, isSelected = false, onAddChild, onSelect, allNodes }: NodeCardProps) {
+  const { playBranch, stopAllNodes, playingNodes } = useAudioStore();
   const isPlaying = playingNodes.has(node.id);
   
   const getInstrumentColor = (instrument: string) => {
@@ -36,10 +36,11 @@ export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: Nod
   const instrumentColor = getInstrumentColor(node.instrument);
   
   const handlePlayPause = () => {
+    onSelect?.(node);
+
     if (isPlaying) {
-      stopAllNodes(); 
-    }
-    else {
+      stopAllNodes();
+    } else {
       const branch = getBranchFrom(allNodes, node.id);
       playBranch(branch);
     }
@@ -61,18 +62,10 @@ export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: Nod
         <div className="flex gap-1">
           <button
             onClick={handlePlayPause}
-            className="rounded-full w-8 h-8 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
+            className="w-8 h-8 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
           >
             {isPlaying ? <Pause size={16} /> : <Play size={16} />}
           </button>
-          {onAddChild && (
-            <button
-              onClick={onAddChild}
-              className="rounded-full w-8 h-8 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
-            >
-              <Plus size={16} />
-            </button>
-          )}
         </div>
       </div>
       
@@ -81,7 +74,7 @@ export function NodeCard({ node, isSelected = false, onAddChild, allNodes }: Nod
           {node.instrument}
         </span>
         <span className="opacity-70">
-          User ID: {node.user_id.substring(0, 8)}
+          {node.users?.username}
         </span>
       </div>
     </div>

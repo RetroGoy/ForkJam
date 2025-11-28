@@ -37,24 +37,41 @@ export default function AuthPage() {
   };
 
   const handleSignUp = async () => {
-    setIsLoading(true);
-    setError('');
+  setIsLoading(true);
+  setError('');
 
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
+  try {
+    // Step 1 : inscription Supabase Auth
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+    });
+
+    if (signUpError) throw signUpError;
+
+    const user = data.user;
+    if (!user) throw new Error("User not returned by Supabase.");
+
+    // Step 2 : créer l'utilisateur dans public.users
+    const { error: dbError } = await supabase
+      .from('users')
+      .insert({
+        id: user.id,            // même UUID que auth.users
+        username: formData.email.split('@')[0], // ou un champ username plus tard
+        email: formData.email
       });
 
-      if (error) throw error;
+    if (dbError) throw dbError;
 
-      setError('Check your email to confirm your account');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // Step 3 : prévenir l’utilisateur
+    setError('Check your email to confirm your account');
+
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">

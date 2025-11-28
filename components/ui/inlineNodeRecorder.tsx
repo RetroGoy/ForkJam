@@ -40,8 +40,21 @@ export function InlineNodeRecorder({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerRef = useRef<number | null>(null);
   
+  const [isClient, setIsClient] = useState(false);
+
+useEffect(() => {
+  setIsClient(true);
+}, []);
+
+if (!isClient) return null;
+  
   // Handle start recording
   const handleRecord = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    toast.error("Micro non disponible");
+    return;
+  }
+
     const permission = await recorder.requestPermission();
     if (!permission) return;
   
@@ -63,34 +76,50 @@ export function InlineNodeRecorder({
     stopVisualizer();
   };
 
-  const handleSave = async () => {
-    const { data: { user }, } = await supabase.auth.getUser();
-  
-    if (!user) {                  
-      toast.error('Vous devez être connecté pour créer un node');
-      return;
-    }
+ const handleSave = async () => {
+  setIsLoading(true);
 
-    if (!title || !instrument || !blob) return;
-    if (elapsedTime > MAX_DURATION) return; 
-    
-    setIsLoading(true);
-    const audio_url = await uploadAudioToSupabase(blob);
-    if (!audio_url) { setIsLoading(false); return; }    
-    
-    await createNode({                          
-      title,
-      instrument,
-      bpm,
-      topic_id: topicId,
-      parent_node_id: parentId,
-      audio_url,
-      user_id: userId,
-    });
-    
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    toast.error("You must be logged in to create a node");
+    setIsLoading(false);
+    return;
+  }
+
+  if (!title || !instrument || !blob) {
+    toast.error("Missing fields");
+    setIsLoading(false);
+    return;
+  }
+
+  // 1. upload audio
+  const audio_url = await uploadAudioToSupabase(blob);
+  if (!audio_url) {
+    toast.error("Upload failed");
+    setIsLoading(false);
+    return;
+  }
+
+  // 2. create node
+  const newNode = await createNode({
+    title,
+    instrument,
+    audio_url,
+    topic_id: topicId,
+    parent_node_id: parentId,
+    user_id: user.id,       
+  });
+
+  if (!newNode) {
+    toast.error("Error saving node");
+  } else {
+    toast.success("Node created!");
     refreshNodes();
     resetRecorder();
-  };
+  }
+
+  setIsLoading(false);
+};
 
     /* ✅ nouveau handler pour le bouton « + » */
     const handleOpenRecorder = async () => {

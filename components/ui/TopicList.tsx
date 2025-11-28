@@ -25,13 +25,12 @@ interface TopicListProps {
 function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 rounded-xl w-full max-w-md p-6 relative shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="bg-gray-900 w-full max-w-md p-6 relative shadow-lg">
         <button
           className="absolute top-3 right-3 text-gray-400 hover:text-white"
           onClick={onClose}
-          aria-label="Close"
-        >
+          aria-label="Close">
           <X size={18} />
         </button>
         {children}
@@ -59,7 +58,7 @@ export default function TopicList({ topics }: TopicListProps) {
 
   console.log("TOPICS RECEIVED:", topics);
 
-  // ─── Helpers ───
+  // ─── Helpers 
   const filters = [
     { id: "recent", label: "Recent" },
     { id: "popular", label: "Popular" },
@@ -70,7 +69,7 @@ export default function TopicList({ topics }: TopicListProps) {
     setSelectedFilters(prev => (prev.includes(filterId) ? prev.filter(id => id !== filterId) : [...prev, filterId]));
   };
 
-  // ── couleurs par style ───────────────────────────────────────
+  // ── couleurs par style 
   const getColorClass = (val?: string) => {
     const lower = val?.toLowerCase() ?? "";
     if (lower.includes("electro")) return "bg-red-700";   // Electro  → rouge
@@ -90,7 +89,7 @@ export default function TopicList({ topics }: TopicListProps) {
     });
   
 
-  // ─── BPM Tap logic ───
+  // BPM Tap logic
   const handleTap = () => {
     const now = Date.now();
     setClickTimes(prev => {
@@ -137,7 +136,7 @@ export default function TopicList({ topics }: TopicListProps) {
 
   // ─── UI ───
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-30 flex flex-col">
       {/* Search */}
       <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
@@ -244,8 +243,7 @@ export default function TopicList({ topics }: TopicListProps) {
             <select
               value={style}
               onChange={e => setStyle(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-md text-sm py-2 px-3 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
+              className="w-full bg-gray-800 border border-gray-700 rounded-md text-sm py-2 px-3 focus:outline-none focus:ring-1 focus:ring-primary">
               {styleOptions.map(s => (
                 <option key={s}>{s}</option>
               ))}

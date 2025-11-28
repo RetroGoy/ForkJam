@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { NodeGraph } from '@/components/ui/NodeGraph';
+import { BranchTimelinePlayer } from "@/components/ui/branchTimelinePlayer";
 import { Topic, Node, getTopics, createNode, uploadAudio } from '@/lib/supabase';
 import { useTopicStore } from '@/store/useTopicStore';
 import { useAudioStore } from '@/store/useAudioStore';
@@ -148,10 +149,17 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
     </aside>
 
     {/* Topic title bar — centered bottom */}
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-20 w-max -translate-x-1/2 rounded-xl bg-gray-900/70 px-4 py-2 text-center backdrop-blur-md">
+    <div className="pointer-events-none fixed bottom-4 left-1/2 z-20 w-max -translate-x-1/2 text-center">
       <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
       {topic.description && <p className="text-sm text-gray-300">{topic.description}</p>}
     </div>
+
+    {/* Lecteur de branche en bas de l’écran */}
+    <BranchTimelinePlayer
+      allNodes={nodes}
+      selectedNode={selectedNode}
+      topicBpm={topic.bpm}
+    />
   </div>
   );
 }

@@ -41,42 +41,47 @@ export function BranchTimelinePlayer({ selectedNode, allNodes, topicBpm }: Props
     setBranch(b);
   }, [selectedNode, allNodes]);
 
-  // ---- INIT WAVEFORMS ----
-  useEffect(() => {
+  // ---- INIT WAVEFORMS (SAFE FOR PRODUCTION) ----
+useEffect(() => {
+  if (branch.length === 0) return;
+  if (typeof window === "undefined") return;
+
+  // Laisser le DOM se stabiliser (ReactFlow + hydration)
+  const timeout = setTimeout(() => {
+    // Clean
     waveforms.current.forEach((wf) => wf.destroy());
     waveforms.current.clear();
     nodeDurations.current = {};
-
     setDuration(0);
 
+    // Recreate waveforms
     branch.forEach((node) => {
       const container = document.getElementById(`wave-${node.id}`);
-      if (!container) return;
+      if (!container) return; // prod-friendly
 
       const wf = WaveSurfer.create({
         container,
         waveColor: getNodeColor(node.instrument),
         progressColor: "#fff",
         barWidth: 2,
-        height: 40
+        height: 40,
       });
 
       wf.load(node.audio_url);
 
       wf.on("ready", () => {
         nodeDurations.current[node.id] = wf.getDuration();
-        const max = Math.max(...Object.values(nodeDurations.current), 0);
-        setDuration(max);
+        setDuration((old) =>
+          Math.max(old, nodeDurations.current[node.id] || 0)
+        );
       });
 
       waveforms.current.set(node.id, wf);
     });
+  }, 150); // ← 150ms suffit. 200 si tu veux blindé.
 
-    return () => {
-      waveforms.current.forEach((wf) => wf.destroy());
-      waveforms.current.clear();
-    };
-  }, [branch]);
+  return () => clearTimeout(timeout);
+}, [branch]);
 
   // ---- MASTER TICK (drives cursor + waveforms) ----
   useEffect(() => {

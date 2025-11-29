@@ -1,11 +1,14 @@
 "use client";
 
+// ════════════════════════════════════════════════════════════════
+// PART A — Imports, types, hooks
+// ════════════════════════════════════════════════════════════════
+
 import React, {
   useState,
   useEffect,
   useRef,
   MouseEvent,
-  ChangeEvent,
 } from "react";
 import {
   Plus,
@@ -20,8 +23,11 @@ import {
   SlidersHorizontal,
   Timer,
   Music2,
+  RotateCcw,
+  Repeat,
 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
+import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 import toast from "react-hot-toast";
 
 import { supabase } from "@/lib/supabase";
@@ -30,7 +36,6 @@ import { createNode } from "@/lib/createNode";
 import { createMetronome } from "@/lib/metronome";
 import { useAudioStore } from "@/store/useAudioStore";
 import { getNodeColor } from "@/lib/getNodeColor";
-import { TrackWaveform } from "@/components/ui/TrackWaveform";
 import type { Node } from "@/lib/supabase";
 
 type RecorderMode = "idle" | "recording" | "editing";
@@ -46,7 +51,7 @@ interface InlineNodeRecorderProps {
   enableGraph: () => void;
 }
 
-// Small helper: format seconds as mm:ss
+// format seconds as mm:ss
 const formatTime = (seconds: number) => {
   const s = Math.max(0, Math.floor(seconds));
   const mins = Math.floor(s / 60);
@@ -81,7 +86,6 @@ function useInputDevices() {
           setSelectedId(audioInputs[0].deviceId);
         }
 
-        // stop temp tracks
         stream.getTracks().forEach((t) => t.stop());
       } catch (err) {
         console.error("Error listing audio devices", err);
@@ -159,9 +163,10 @@ function useMetronome(bpm: number) {
   return { startSimple, stop, startPreRoll };
 }
 
-/**
- * Main InlineNodeRecorder: mini DAW-like inline recorder + editor.
- */
+// ════════════════════════════════════════════════════════════════
+// PART B — Logic, effets, enregistrement, waveforms
+// ════════════════════════════════════════════════════════════════
+
 export function InlineNodeRecorder({
   parentId,
   topicId,
@@ -172,43 +177,41 @@ export function InlineNodeRecorder({
   disableGraph,
   enableGraph,
 }: InlineNodeRecorderProps) {
-  // ---- UI & auth gate ----
+  // UI / état global
   const [isOpen, setIsOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
-
   const [title, setTitle] = useState("");
   const [instrument, setInstrument] = useState("");
-
   const [mode, setMode] = useState<RecorderMode>("idle");
 
-  // ---- existing branch playback via central audio store ----
+  // store audio global
   const playBranch = useAudioStore((s) => s.playBranch);
   const stopAllNodes = useAudioStore((s) => s.stopAllNodes);
   const playingNodes = useAudioStore((s) => s.playingNodes);
   const setGain = useAudioStore((s) => s.setGain);
 
-  // branch waveforms
+  // waveforms branch
   const branchWaveformsRef = useRef<Map<string, WaveSurfer>>(new Map());
   const branchDurationsRef = useRef<Record<string, number>>({});
   const [muted, setMuted] = useState<Record<string, boolean>>({});
+  const [trackGains, setTrackGains] = useState<Record<string, number>>({});
 
-  // ---- recording (raw take) ----
+  // enregistrement
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordChunksRef = useRef<Blob[]>([]);
   const recordStartTimeRef = useRef<number>(0);
   const [isRecording, setIsRecording] = useState(false);
-
   const [takeBlob, setTakeBlob] = useState<Blob | null>(null);
   const [takeUrl, setTakeUrl] = useState<string | null>(null);
   const [takeDuration, setTakeDuration] = useState<number>(0);
 
-  // ---- editing: trim / loop / gain ----
+  // édition
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
   const [loopEnabled, setLoopEnabled] = useState(false);
   const [recGain, setRecGain] = useState(1);
 
-  // ---- mini timeline (common) ----
+  // timeline commune
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -218,11 +221,12 @@ export function InlineNodeRecorder({
   const [isPreRoll, setIsPreRoll] = useState(false);
   const [preRollBeat, setPreRollBeat] = useState<number | null>(null);
 
-  // rec waveform
+  // waveform REC
   const recWaveformRef = useRef<WaveSurfer | null>(null);
+  const recRegionsRef = useRef<any | null>(null);
   const recWaveContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // playback of REC (with FX)
+  // graph audio FX pour REC
   const recAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -230,7 +234,6 @@ export function InlineNodeRecorder({
   const lowpassNodeRef = useRef<BiquadFilterNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
-  // FX
   const [distortionEnabled, setDistortionEnabled] = useState(false);
   const [lowpassEnabled, setLowpassEnabled] = useState(false);
 
@@ -238,32 +241,40 @@ export function InlineNodeRecorder({
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  const MAX_DURATION = 180; // seconds
+  const MAX_DURATION = 180; // secondes max
 
   const { devices, selectedId, hasPermission, setSelectedId } = useInputDevices();
-  const { startSimple, stop: stopMetronome, startPreRoll } = useMetronome(bpm);
+  const { stop: stopMetronome, startPreRoll } = useMetronome(bpm);
 
-  // ---- SSR guard ----
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // ---- INIT BRANCH WAVEFORMS ----
+  // ───────────────────────────────────────────
+  // BRANCH WAVEFORMS (pistes existantes)
+  // ───────────────────────────────────────────
   useEffect(() => {
     if (!isClient) return;
-    if (branchNodes.length === 0) return;
-
     const waveMap = branchWaveformsRef.current;
-    waveMap.forEach((wf) => wf.destroy());
-    waveMap.clear();
-    branchDurationsRef.current = {};
-    setDuration(0);
 
-    // allow DOM to mount containers
-    const timeout = setTimeout(() => {
+    // Supprimer les waveforms des nodes qui n'existent plus
+    waveMap.forEach((wf, id) => {
+      if (!branchNodes.some((n) => n.id === id)) {
+        wf.destroy();
+        waveMap.delete(id);
+        delete branchDurationsRef.current[id];
+      }
+    });
+
+    // Création / attach des waveforms manquantes
+    const frame = requestAnimationFrame(() => {
       branchNodes.forEach((node) => {
         if (!node.audio_url) return;
-        const container = document.getElementById(`inline-rec-wave-${node.id}`);
+        if (waveMap.has(node.id)) return; // déjà créé
+
+        const container = document.getElementById(
+          `inline-branch-wave-${node.id}`
+        );
         if (!container) return;
 
         const wf = WaveSurfer.create({
@@ -271,7 +282,7 @@ export function InlineNodeRecorder({
           waveColor: getNodeColor(node.instrument),
           progressColor: "#ffffff",
           barWidth: 2,
-          height: 32,
+          height: 36,
         });
 
         wf.load(node.audio_url);
@@ -284,13 +295,14 @@ export function InlineNodeRecorder({
 
         waveMap.set(node.id, wf);
       });
-    }, 120);
+    });
 
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchNodes, isClient]);
+    return () => cancelAnimationFrame(frame);
+  }, [branchNodes, isClient, takeDuration]);
 
-  // ---- INIT REC WAVEFORM WHEN TAKE AVAILABLE ----
+  // ───────────────────────────────────────────
+  // WAVEFORM REC + REGIONS (trim DAW-style)
+  // ───────────────────────────────────────────
   useEffect(() => {
     if (!isClient) return;
     if (!takeUrl || !recWaveContainerRef.current) return;
@@ -298,15 +310,24 @@ export function InlineNodeRecorder({
     if (recWaveformRef.current) {
       recWaveformRef.current.destroy();
       recWaveformRef.current = null;
+      recRegionsRef.current = null;
     }
 
-    const wf = WaveSurfer.create({
-      container: recWaveContainerRef.current,
-      waveColor: "#fbbf24",
-      progressColor: "#ffffff",
-      barWidth: 2,
-      height: 40,
-    });
+ const wf = WaveSurfer.create({
+  container: recWaveContainerRef.current,
+  waveColor: "#fbbf24",
+  progressColor: "#ffffff",
+  barWidth: 2,
+  height: 56,
+});
+
+// Typage un peu archaïque de wavesurfer.js : on force en any
+const regions = wf.registerPlugin(
+  (RegionsPlugin as any).create({
+    dragSelection: true,
+  }) as any
+);
+recRegionsRef.current = regions;
 
     wf.load(takeUrl);
 
@@ -315,7 +336,22 @@ export function InlineNodeRecorder({
       setTakeDuration(d);
       setTrimStart(0);
       setTrimEnd(d);
-      setDuration((prev) => Math.max(prev, d, ...Object.values(branchDurationsRef.current)));
+      setDuration((prev) =>
+        Math.max(prev, d, ...Object.values(branchDurationsRef.current))
+      );
+
+      const region = regions.addRegion({
+        start: 0,
+        end: d,
+        color: "rgba(255, 200, 0, 0.25)",
+        drag: true,
+        resize: true,
+      });
+
+      region.on("update-end", (r: any) => {
+        setTrimStart(r.start);
+        setTrimEnd(r.end);
+      });
     });
 
     recWaveformRef.current = wf;
@@ -323,10 +359,13 @@ export function InlineNodeRecorder({
     return () => {
       wf.destroy();
       recWaveformRef.current = null;
+      recRegionsRef.current = null;
     };
   }, [takeUrl, isClient]);
 
-  // ---- MASTER TICK: drives cursor + waveforms while playing ----
+  // ───────────────────────────────────────────
+  // MASTER TICK : lecture, curseur, synchro
+  // ───────────────────────────────────────────
   useEffect(() => {
     if (!isClient) return;
 
@@ -359,7 +398,7 @@ export function InlineNodeRecorder({
         setCurrent(maxT);
         const p = Math.min(maxT / maxD, 1);
 
-        // cursor
+        // curseur
         if (timelineRef.current && cursorRef.current) {
           const W = timelineRef.current.clientWidth;
           cursorRef.current.style.transform = `translateX(${W * p}px)`;
@@ -368,17 +407,19 @@ export function InlineNodeRecorder({
         // waveforms
         branchWaveformsRef.current.forEach((wf) => wf.seekTo(p));
         if (recWaveformRef.current) {
-          const relTime = Math.min(Math.max(maxT - trimStart, 0), trimEnd - trimStart);
+          const relTime = Math.min(
+            Math.max(maxT - trimStart, 0),
+            trimEnd - trimStart
+          );
           const relP = (relTime || 0) / ((trimEnd - trimStart) || 0.001);
           recWaveformRef.current.seekTo(Math.min(1, Math.max(0, relP)));
         }
 
-        // loop logic
+        // loop sur la région
         if (loopEnabled && recAudio) {
           const absTime = trimStart + recAudio.currentTime;
           if (absTime >= trimEnd - 0.03) {
             recAudio.currentTime = 0;
-            // restart branch for "context" loop
             stopAllNodes();
             playBranch(branchNodes);
           }
@@ -392,12 +433,21 @@ export function InlineNodeRecorder({
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchNodes, playingNodes, duration, trimStart, trimEnd, loopEnabled, isClient]);
+  }, [
+    branchNodes,
+    playingNodes,
+    duration,
+    trimStart,
+    trimEnd,
+    loopEnabled,
+    isClient,
+    playBranch,
+    stopAllNodes,
+  ]);
 
-  // ---- input device & metronome hooks already initialized above ----
-
-  // ---- helpers: reset / cleanup ----
+  // ───────────────────────────────────────────
+  // helpers reset / cleanup
+  // ───────────────────────────────────────────
   const resetRecordingState = () => {
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
@@ -408,8 +458,8 @@ export function InlineNodeRecorder({
         if (mediaRecorderRef.current.state !== "inactive") {
           mediaRecorderRef.current.stop();
         }
-      } catch (e) {
-        // ignore
+      } catch {
+        /* ignore */
       }
       mediaRecorderRef.current = null;
     }
@@ -422,8 +472,8 @@ export function InlineNodeRecorder({
     try {
       recAudioRef.current?.pause();
       recAudioRef.current = null;
-    } catch (_) {
-      // ignore
+    } catch {
+      /* ignore */
     }
     if (audioContextRef.current) {
       audioContextRef.current.close();
@@ -462,6 +512,7 @@ export function InlineNodeRecorder({
     setLoopEnabled(false);
     setRecGain(1);
     setMuted({});
+    setTrackGains({});
     setDistortionEnabled(false);
     setLowpassEnabled(false);
     setDuration(0);
@@ -477,7 +528,7 @@ export function InlineNodeRecorder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- FX audio graph ----
+  // FX graph
   const ensureRecAudioGraph = () => {
     if (!takeUrl) return;
 
@@ -492,7 +543,7 @@ export function InlineNodeRecorder({
 
     const audioCtx = audioContextRef.current;
 
-    if (!sourceNodeRef.current) {
+    if (!sourceNodeRef.current && recAudioRef.current) {
       sourceNodeRef.current = audioCtx.createMediaElementSource(recAudioRef.current);
     }
 
@@ -507,19 +558,17 @@ export function InlineNodeRecorder({
       gainNodeRef.current = audioCtx.createGain();
     }
 
-    // simple chain: source -> distortion -> lowpass -> gain -> destination
-    sourceNodeRef.current.disconnect();
-    distortionNodeRef.current.disconnect();
-    lowpassNodeRef.current.disconnect();
-    gainNodeRef.current.disconnect();
+    sourceNodeRef.current?.disconnect();
+    distortionNodeRef.current?.disconnect();
+    lowpassNodeRef.current?.disconnect();
+    gainNodeRef.current?.disconnect();
 
     sourceNodeRef.current
-      .connect(distortionNodeRef.current)
-      .connect(lowpassNodeRef.current)
-      .connect(gainNodeRef.current)
+      ?.connect(distortionNodeRef.current!)
+      .connect(lowpassNodeRef.current!)
+      .connect(gainNodeRef.current!)
       .connect(audioCtx.destination);
 
-    // parameters
     const makeDistortionCurve = (amount: number) => {
       const k = typeof amount === "number" ? amount : 0;
       const n = 44100;
@@ -546,11 +595,7 @@ export function InlineNodeRecorder({
     }
 
     if (lowpassNodeRef.current) {
-      if (lowpassEnabled) {
-        lowpassNodeRef.current.frequency.value = 2000;
-      } else {
-        lowpassNodeRef.current.frequency.value = 20000;
-      }
+      lowpassNodeRef.current.frequency.value = lowpassEnabled ? 2000 : 20000;
     }
 
     if (gainNodeRef.current) {
@@ -558,16 +603,16 @@ export function InlineNodeRecorder({
     }
   };
 
-  // update FX graph whenever toggles / gain change
   useEffect(() => {
     ensureRecAudioGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [distortionEnabled, lowpassEnabled, recGain, takeUrl]);
 
-  // ---- mute / gain for existing tracks ----
+  // Mute / gain pistes existantes
   const applyVolumeRules = () => {
     branchNodes.forEach((n) => {
-      const v = muted[n.id] ? 0 : 1;
+      const gain = trackGains[n.id] ?? 1;
+      let v = muted[n.id] ? 0 : gain;
       setGain(n.id, v);
     });
   };
@@ -580,10 +625,14 @@ export function InlineNodeRecorder({
     setTimeout(applyVolumeRules, 0);
   };
 
-  // ---- play / stop timeline in EDITING mode ----
+  const handleTrackGainChange = (id: string, value: number) => {
+    setTrackGains((prev) => ({ ...prev, [id]: value }));
+    setGain(id, muted[id] ? 0 : value);
+  };
+
+  // Play / stop timeline EDIT
   const handlePlay = () => {
     if (!takeUrl) {
-      // just play branch as reference
       stopAllNodes();
       playBranch(branchNodes);
       return;
@@ -592,20 +641,14 @@ export function InlineNodeRecorder({
     ensureRecAudioGraph();
     if (!recAudioRef.current) return;
 
-    // reset everything
     stopAllNodes();
     recAudioRef.current.pause();
     recAudioRef.current.currentTime = 0;
-
-    // start branch from beginning
     playBranch(branchNodes);
 
-    // start rec from trimStart
-    const startOffset = 0; // we always start the audio element at 0
-    recAudioRef.current.currentTime = startOffset;
-    recAudioRef.current.play().catch((err) => {
-      console.error("Error playing take", err);
-    });
+    recAudioRef.current
+      .play()
+      .catch((err) => console.error("Error playing take", err));
 
     setIsPlaying(true);
   };
@@ -619,7 +662,7 @@ export function InlineNodeRecorder({
     setIsPlaying(false);
   };
 
-  // ---- timeline click (scrub) ----
+  // scrub timeline
   const handleTimelineClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current || duration <= 0) return;
     const rect = timelineRef.current.getBoundingClientRect();
@@ -628,16 +671,13 @@ export function InlineNodeRecorder({
 
     setCurrent(t);
 
-    // branch waveforms
     branchWaveformsRef.current.forEach((wf) => wf.seekTo(p));
-    // rec waveform
     if (recWaveformRef.current) {
       const relTime = Math.min(Math.max(t - trimStart, 0), trimEnd - trimStart);
       const relP = relTime / ((trimEnd - trimStart) || 0.001);
       recWaveformRef.current.seekTo(relP);
     }
 
-    // if playing, seek underlying audio elements as well
     if (isPlaying) {
       branchNodes.forEach((n) => {
         const a = playingNodes.get(n.id);
@@ -646,13 +686,16 @@ export function InlineNodeRecorder({
         }
       });
       if (recAudioRef.current) {
-        const rel = Math.min(Math.max(t - trimStart, 0), (trimEnd - trimStart) || t);
+        const rel = Math.min(
+          Math.max(t - trimStart, 0),
+          (trimEnd - trimStart) || t
+        );
         recAudioRef.current.currentTime = rel;
       }
     }
   };
 
-  // ---- record logic ----
+  // enregistrement
   const startRecordTimer = () => {
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     let elapsed = 0;
@@ -673,9 +716,7 @@ export function InlineNodeRecorder({
 
     try {
       const constraints: MediaStreamConstraints = {
-        audio: selectedId
-          ? { deviceId: { exact: selectedId } }
-          : true,
+        audio: selectedId ? { deviceId: { exact: selectedId } } : true,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -687,12 +728,13 @@ export function InlineNodeRecorder({
 
       mediaRecorderRef.current = mediaRecorder;
       recordChunksRef.current = [];
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordChunksRef.current.push(e.data);
       };
 
       mediaRecorder.onstop = () => {
-        const duration =
+        const durationSec =
           (Date.now() - recordStartTimeRef.current) / 1000;
         const blob = new Blob(recordChunksRef.current, {
           type: "audio/webm",
@@ -701,9 +743,9 @@ export function InlineNodeRecorder({
 
         setTakeBlob(blob);
         setTakeUrl(url);
-        setTakeDuration(duration);
+        setTakeDuration(durationSec);
         setTrimStart(0);
-        setTrimEnd(duration);
+        setTrimEnd(durationSec);
         setMode("editing");
         setIsRecording(false);
         setIsPreRoll(false);
@@ -723,7 +765,6 @@ export function InlineNodeRecorder({
       setCurrent(0);
       startRecordTimer();
 
-      // play branch during recording
       stopAllNodes();
       playBranch(branchNodes);
     } catch (err) {
@@ -745,7 +786,6 @@ export function InlineNodeRecorder({
     setPreRollBeat(null);
     setCurrent(0);
 
-    // pre-roll 4 temps
     startPreRoll(
       4,
       (beat) => {
@@ -760,7 +800,10 @@ export function InlineNodeRecorder({
   };
 
   const handleStopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream
         .getTracks()
@@ -768,7 +811,19 @@ export function InlineNodeRecorder({
     }
   };
 
-  // ---- save node ----
+  const handleReRecord = () => {
+    if (takeUrl) URL.revokeObjectURL(takeUrl);
+    setTakeBlob(null);
+    setTakeUrl(null);
+    setTakeDuration(0);
+    setTrimStart(0);
+    setTrimEnd(0);
+    setLoopEnabled(false);
+    resetRecAudioGraph();
+    setMode("idle");
+  };
+
+  // save node
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -829,7 +884,6 @@ export function InlineNodeRecorder({
     }
   };
 
-  // ---- open recorder (auth gate) ----
   const handleOpenRecorder = async () => {
     const { data } = await supabase.auth.getUser();
     const user = data.user;
@@ -840,22 +894,12 @@ export function InlineNodeRecorder({
     setIsOpen(true);
   };
 
-  // ---- trim sliders ----
-  const handleTrimStartChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const v = parseFloat(e.target.value);
-    if (v >= trimEnd) return;
-    setTrimStart(v);
-  };
-
-  const handleTrimEndChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const v = parseFloat(e.target.value);
-    if (v <= trimStart) return;
-    setTrimEnd(v);
-  };
-
   if (!isClient) return null;
 
-  // ---- collapsed "+" button ----
+  // ════════════════════════════════════════════════════════════════
+  // PART C — Rendu JSX (UI / DAW mini)
+  // ════════════════════════════════════════════════════════════════
+
   if (!isOpen) {
     return (
       <button
@@ -869,8 +913,16 @@ export function InlineNodeRecorder({
   }
 
   return (
-    <div className="w-full max-w-3xl mt-2 rounded-md border border-yellow-900/60 bg-black/80 text-gray-100 p-4 space-y-4">
-<div onMouseEnter={disableGraph} onMouseLeave={enableGraph}>
+    <div
+      className="w-full max-w-3xl mt-2 rounded-md border border-yellow-900/60 bg-black/80 text-gray-100 p-4 space-y-4"
+      onMouseEnter={disableGraph}
+      onMouseLeave={enableGraph}
+      // BLOQUE tous les events pour ReactFlow
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* HEADER */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
@@ -903,7 +955,7 @@ export function InlineNodeRecorder({
         />
       </div>
 
-      {/* INPUT SELECTION + METRONOME / BPM */}
+      {/* INPUT SELECTION + TIMER / BPM */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between text-xs text-gray-300">
         <div className="flex items-center gap-2 w-full md:w-2/3">
           <span className="whitespace-nowrap">Entrée audio :</span>
@@ -926,11 +978,11 @@ export function InlineNodeRecorder({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <Timer size={14} />
-            <span>{formatTime(current)} / {formatTime(duration)}</span>
+            <span>
+              {formatTime(current)} / {formatTime(duration)}
+            </span>
           </div>
-          <div className="text-yellow-300 text-xs">
-            {bpm} BPM
-          </div>
+          <div className="text-yellow-300 text-xs">{bpm} BPM</div>
         </div>
       </div>
 
@@ -940,36 +992,64 @@ export function InlineNodeRecorder({
           <span>Pistes existantes de la branche</span>
           <span>{branchNodes.length} piste(s)</span>
         </div>
+
         {branchNodes.map((node) => (
           <div
             key={node.id}
-            className="flex items-center gap-2 text-xs"
+            className="relative flex flex-col sm:flex-row sm:items-center gap-2 text-xs"
           >
-            <button
-              onClick={() => toggleMute(node.id)}
-              className="w-6 h-6 flex items-center justify-center rounded bg-gray-900 border border-gray-700"
-            >
-              {muted[node.id] ? (
-                <VolumeX size={14} className="text-red-400" />
-              ) : (
-                <Volume2 size={14} className="text-green-400" />
-              )}
-            </button>
-            <div className="flex-1">
-              <TrackWaveform
-                url={node.audio_url}
-                color={getNodeColor(node.instrument)}
-                height={32}
+            {/* Volume + hover gain */}
+            <div className="relative group">
+              <button
+                onClick={() => toggleMute(node.id)}
+                className="w-7 h-7 flex items-center justify-center 
+                           rounded bg-gray-900 border border-gray-700"
+              >
+                {muted[node.id] ? (
+                  <VolumeX size={14} className="text-red-400" />
+                ) : (
+                  <Volume2 size={14} className="text-green-400" />
+                )}
+              </button>
+
+              <div
+                className="absolute left-1/2 -translate-x-1/2 -top-11 
+                           opacity-0 group-hover:opacity-100
+                           transition-opacity bg-black px-3 py-2 rounded-md border border-gray-700 shadow-lg"
+              >
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={trackGains[node.id] ?? 1}
+                  onChange={(e) =>
+                    handleTrackGainChange(node.id, parseFloat(e.target.value))
+                  }
+                  className="w-28"
+                />
+              </div>
+            </div>
+
+            {/* Waveform container */}
+            <div className="flex-1 min-w-0">
+              <div
+                id={`inline-branch-wave-${node.id}`}
+                className="w-full h-10 bg-black/70 rounded-sm overflow-hidden pointer-events-none"
+                style={{ transform: "translateZ(0)" }}
               />
             </div>
+
+            {/* Label droit */}
             <div
-              className="whitespace-nowrap text-right font-semibold min-w-[120px]"
+              className="whitespace-nowrap text-right font-semibold min-w-[140px]"
               style={{ color: getNodeColor(node.instrument) }}
             >
               {node.instrument} — {node.title}
             </div>
           </div>
         ))}
+
         {branchNodes.length === 0 && (
           <div className="text-xs text-gray-500 italic">
             Aucune piste dans cette branche pour le moment.
@@ -980,75 +1060,90 @@ export function InlineNodeRecorder({
       {/* TAKE TRACK + EDITOR */}
       <div className="space-y-3 border border-yellow-800/60 bg-yellow-950/10 rounded-md p-3">
         <div className="flex items-center justify-between text-xs text-yellow-200">
-          <span>Nouvelle piste (REC)</span>
-          {mode === "recording" && isPreRoll && (
-            <span className="text-red-400">
-              Pré-roll&nbsp;
-              {preRollBeat !== null ? `(${preRollBeat})` : ""}
-            </span>
-          )}
-          {mode === "recording" && !isPreRoll && (
-            <span className="text-green-400">Enregistrement en cours...</span>
-          )}
-          {mode === "editing" && (
-            <span className="text-green-300">
-              Mode édition — {formatTime(trimStart)} → {formatTime(trimEnd)}
-            </span>
-          )}
-        </div>
-
-        {/* wave of take */}
-        <div className="w-full h-16 bg-black/70 rounded-sm overflow-hidden">
-          <div
-            ref={recWaveContainerRef}
-            className="w-full h-full"
-          />
-        </div>
-
-        {/* TRIM CONTROLS */}
-        {takeUrl && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-gray-300">
-              <span>Trim début / fin</span>
-              <span>
-                {formatTime(trimStart)} → {formatTime(trimEnd)}{" "}
-                ({formatTime(trimEnd - trimStart)})
+          <div className="flex items-center gap-2">
+            <span>Nouvelle piste (REC)</span>
+            {mode === "recording" && isPreRoll && (
+              <span className="text-red-400 flex items-center gap-1">
+                <Repeat size={12} />
+                Pré-roll&nbsp;
+                {preRollBeat !== null ? `(${preRollBeat})` : ""}
               </span>
+            )}
+            {mode === "recording" && !isPreRoll && (
+              <span className="text-green-400">Enregistrement en cours...</span>
+            )}
+            {mode === "editing" && (
+              <span className="text-green-300">
+                Mode édition — {formatTime(trimStart)} → {formatTime(trimEnd)}
+              </span>
+            )}
+          </div>
+
+          {mode === "editing" && (
+            <button
+              onClick={handleReRecord}
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-red-700 hover:bg-red-600"
+            >
+              <RotateCcw size={12} />
+              Ré-enregistrer
+            </button>
+          )}
+        </div>
+
+        {/* REC waveform */}
+        <div className="w-full h-20 bg-black/70 rounded-sm overflow-hidden">
+          <div ref={recWaveContainerRef} className="w-full h-full" />
+        </div>
+
+        {takeUrl && (
+          <div className="flex flex-col gap-2 text-xs text-gray-300 mt-1">
+            <div className="flex items-center justify-between">
+              <span>
+                Fenêtre sélectionnée : {formatTime(trimStart)} →{" "}
+                {formatTime(trimEnd)} (
+                {formatTime(Math.max(trimEnd - trimStart, 0))})
+              </span>
+              <button
+                onClick={() => setLoopEnabled((v) => !v)}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                  loopEnabled
+                    ? "bg-yellow-500 text-black"
+                    : "bg-gray-800 text-gray-200"
+                }`}
+              >
+                <Repeat size={12} />
+                Loop
+              </button>
             </div>
-            <div className="flex flex-col gap-1">
-              <input
-                type="range"
-  onMouseDown={disableGraph}
-  onMouseUp={enableGraph}
-                min={0}
-                max={takeDuration || 0}
-                step={0.05}
-                value={trimStart}
-                onChange={handleTrimStartChange}
-                className="w-full"
-              />
-              <input
-                type="range"
-                min={0}
-                max={takeDuration || 0}
-                step={0.05}
-                value={trimEnd}
-                onChange={handleTrimEndChange}
-                className="w-full"
-              />
-            </div>
-            <div className="flex items-center justify-between text-xs text-gray-300 mt-1">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={loopEnabled}
-                  onChange={(e) => setLoopEnabled(e.target.checked)}
-                  className="accent-yellow-400"
-                />
-                Boucler la sélection
-              </label>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span>Gain piste REC</span>
+                <SlidersHorizontal size={14} />
+                <span className="text-gray-400">Effets (REC)</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={distortionEnabled}
+                    onChange={(e) => setDistortionEnabled(e.target.checked)}
+                    className="accent-yellow-400"
+                  />
+                  Distortion
+                </label>
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={lowpassEnabled}
+                    onChange={(e) => setLowpassEnabled(e.target.checked)}
+                    className="accent-yellow-400"
+                  />
+                  Low-pass
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span>Gain REC</span>
                 <input
                   type="range"
                   min={0}
@@ -1056,48 +1151,20 @@ export function InlineNodeRecorder({
                   step={0.05}
                   value={recGain}
                   onChange={(e) => setRecGain(parseFloat(e.target.value))}
+                  className="w-32"
                 />
               </div>
             </div>
           </div>
         )}
-
-        {/* FX PANEL */}
-        {takeUrl && (
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-300">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={14} />
-              <span className="text-gray-400">Effets (REC)</span>
-            </div>
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={distortionEnabled}
-                onChange={(e) => setDistortionEnabled(e.target.checked)}
-                className="accent-yellow-400"
-              />
-              Distortion
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={lowpassEnabled}
-                onChange={(e) => setLowpassEnabled(e.target.checked)}
-                className="accent-yellow-400"
-              />
-              Low-pass
-            </label>
-          </div>
-        )}
       </div>
 
-      {/* TIMELINE STRIP */}
+      {/* TIMELINE GLOBALE */}
       <div
         ref={timelineRef}
         onClick={handleTimelineClick}
         className="relative w-full h-10 bg-black/60 border border-gray-800 rounded-md overflow-hidden cursor-pointer"
       >
-        {/* simple grid / beat markers */}
         <div className="absolute inset-0 flex">
           {Array.from({ length: 16 }).map((_, i) => (
             <div
@@ -1108,7 +1175,6 @@ export function InlineNodeRecorder({
             />
           ))}
         </div>
-        {/* cursor */}
         <div
           ref={cursorRef}
           className="absolute top-0 bottom-0 w-[2px] bg-yellow-400 pointer-events-none"
@@ -1116,10 +1182,9 @@ export function InlineNodeRecorder({
         />
       </div>
 
-      {/* TRANSPORT + ACTIONS */}
+      {/* TRANSPORT + SAVE */}
       <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="flex items-center gap-2 w-full md:w-auto">
-          {/* RECORD / STOP */}
           {mode !== "editing" && !isRecording && (
             <button
               onClick={handleStartRecording}
@@ -1139,7 +1204,6 @@ export function InlineNodeRecorder({
             </button>
           )}
 
-          {/* PLAY / STOP (context + take) */}
           {mode === "editing" && (
             <>
               {!isPlaying ? (
@@ -1163,7 +1227,6 @@ export function InlineNodeRecorder({
           )}
         </div>
 
-        {/* SAVE */}
         <button
           onClick={handleSave}
           disabled={
@@ -1183,7 +1246,6 @@ export function InlineNodeRecorder({
           <span>Share</span>
         </button>
       </div>
-    </div>
     </div>
   );
 }

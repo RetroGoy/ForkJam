@@ -46,7 +46,7 @@ function MusicNode({ data }: any) {
         node={node}
         allNodes={allNodes}
         onAddChild={() => onAddChild(node)}
-        onSelect={onSelect}              // 🔹 important
+        onSelect={onSelect} 
       />
       <Handle type="source" position={Position.Right} id="s" style={{ opacity: 0, width: 7, height: 7 }} />
     </div>

@@ -231,7 +231,7 @@ data: {
   // ─────────────────────────────── render ────────────────────────────────
   return (
     <ReactFlowProvider>
-      <div className="w-full h-full">
+      <div className="w-full h-screen overflow-hidden m-0">
 <ReactFlow
   nodes={rfNodes}
   edges={rfEdges}

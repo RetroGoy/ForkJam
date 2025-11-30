@@ -117,7 +117,7 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    <div className="relative h-screen w-screen overflow-hidden m-0">
     <div className="absolute inset-0 z-0">
       <NodeGraph
         nodes={nodes}
@@ -141,10 +141,7 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
     </header>
 
     {/* Fixed Sidebar — collapses on small screens */}
-    <aside
-      className="fixed top-32 left-0 z-20 h-[calc(100vh-4rem)] overflow-y-auto sm:-translate-x-full sm:transition-transform sm:duration-300 sm:ease-in-out sm:data-[open='true']:translate-x-0"
-      data-open="true"
-    >
+    <aside className="fixed top-32 left-0 bottom-0 z-10 h-[calc(100vh-4rem)] w-[20%] min-w-[250px]">
       <Sidebar topics={topics} />
     </aside>
 

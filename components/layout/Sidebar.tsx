@@ -10,10 +10,9 @@ interface SidebarProps {
   topics: Topic[];
 }
 
-export function Sidebar({ topics }: SidebarProps) {
-  const [modalOpen, setModalOpen] = useState(false);
+export function Sidebar({ topics }: SidebarProps) { const [modalOpen, setModalOpen] = useState(false);
   return (
-    <div className="h-100 w-[30%] min-w-[250px] flex flex-col">
+    <div className="w-[20%] min-w-[250px] flex flex-col">
 
       <div className="flex-grow overflow-hidden bg-gray-900/60 p-2 mx-2 bg-blur">
         <TopicList topics={topics} />
@@ -26,8 +25,7 @@ export function Sidebar({ topics }: SidebarProps) {
               href="https://dumatus.fr"
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full text-left bg-gray-900/80 border border-yellow-900/30 backdrop-blur-sm p-3 hover:bg-gray-800/80"
-            >
+              className="block w-full text-left bg-gray-900/80 border border-yellow-900/30 backdrop-blur-sm p-3 hover:bg-gray-800/80">
               <div className="flex justify-between items-start">
                 <h4 className="font-mono text-blue-400">OTHER APPS</h4>
                 <ExternalLink size={14} className="mt-0.5 text-blue-400" />

@@ -118,7 +118,7 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
 
   return (
     <div className="relative h-screen w-screen overflow-hidden m-0">
-    <div className="absolute inset-0 z-0">
+    <div className="absolute inset-0 z-10">
       <NodeGraph
         nodes={nodes}
         onNodeSelect={handleNodeSelect}
@@ -150,13 +150,15 @@ export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) 
       <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
       {topic.description && <p className="text-sm text-gray-300">{topic.description}</p>}
     </div>
-
-    {/* Lecteur de branche en bas de l’écran */}
-    <BranchTimelinePlayer
-      allNodes={nodes}
-      selectedNode={selectedNode}
-      topicBpm={topic.bpm}
-    />
+    
+{/* Branch timeline as background */}
+<div className="pointer-events-none fixed inset-0 z-[5] opacity-80">
+  <BranchTimelinePlayer
+    allNodes={nodes}
+    selectedNode={selectedNode}
+    topicBpm={topic.bpm}
+  />
+</div>
   </div>
   );
 }

@@ -232,21 +232,20 @@ data: {
   return (
     <ReactFlowProvider>
       <div className="w-full h-screen overflow-hidden m-0">
-<ReactFlow
-  nodes={rfNodes}
-  edges={rfEdges}
-  onNodesChange={onNodesChange}
-  onEdgesChange={onEdgesChange}
-  onNodeClick={(_, n) => {
-    if (n.type === "music") onNodeSelect((n.data as any).node);
-  }}
-  nodeTypes={nodeTypes}
-  defaultEdgeOptions={{ type: "smoothstep", style: EDGE_STYLE }}
-  nodesDraggable={false}
-  panOnDrag={interactionEnabled}
-  zoomOnScroll={interactionEnabled}
-  fitView
->
+        <ReactFlow
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={(_, n) => {
+            if (n.type === "music") onNodeSelect((n.data as any).node);
+          }}
+          nodeTypes={nodeTypes}
+          defaultEdgeOptions={{ type: "smoothstep", style: EDGE_STYLE }}
+          nodesDraggable={false}
+          panOnDrag={interactionEnabled}
+          zoomOnScroll={interactionEnabled}
+          fitView>
           <div className="absolute right-0 bottom-0 z-10">
             <Controls />
           </div>

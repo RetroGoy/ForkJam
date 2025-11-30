@@ -177,37 +177,24 @@ useEffect(() => {
     `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-5xl
-                    bg-black/70 border border-yellow-500 p-4 z-50 space-y-4">
-
-      {/* HEADER */}
-      <div className="flex justify-between items-center">
-        <div className="text-yellow-200 font-semibold">
-          Branch: {selectedNode.title}
-        </div>
-      </div>
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-5xl p-4 z-50 space-y-4">
 
       {/* TIMELINE */}
-      <div ref={timelineRef} className="relative w-full h-40 bg-black/30 border border-gray-700 rounded-md overflow-hidden">
+      <div ref={timelineRef} className="relative w-full h-60 overflow-hidden">
 
         <div className="absolute inset-0 p-3 space-y-3">
           {branch.map((node) => (
             <div key={node.id} className="flex items-center gap-3">
 
-              {/* mute */}
-              <button onClick={() => toggleMute(node.id)} className="w-6 h-6 bg-gray-800 rounded flex items-center justify-center">
-                {muted[node.id] ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </button>
-
               <div className="flex-1">
-                <div id={`wave-${node.id}`} className="w-full h-12" />
+                <div id={`wave-${node.id}`} className="w-full h-20" />
               </div>
 
               <div
                 className="text-xs font-semibold min-w-[120px] text-right"
                 style={{ color: getNodeColor(node.instrument) }}
               >
-                {node.instrument} — {node.title}
+                {node.title}
               </div>
             </div>
           ))}
@@ -218,7 +205,7 @@ useEffect(() => {
       <div className="flex justify-between text-sm text-gray-300">
         <div className="flex items-center gap-2">
           <Timer size={14} />
-          {format(current)} / {format(duration)}
+          {format(current)}
         </div>
         <div>{topicBpm} BPM</div>
       </div>

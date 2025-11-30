@@ -914,7 +914,7 @@ recRegionsRef.current = regions;
 
   return (
     <div
-      className="w-full max-w-3xl mt-2 rounded-md border border-yellow-900/60 bg-black/80 text-gray-100 p-4 space-y-4"
+      className="w-full max-w-3xl mt-2 rounded-md bg-black/60 text-gray-100 p-4 space-y-4"
       onMouseEnter={disableGraph}
       onMouseLeave={enableGraph}
       // BLOQUE tous les events pour ReactFlow
@@ -926,9 +926,8 @@ recRegionsRef.current = regions;
       {/* HEADER */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <Music2 className="text-yellow-400" size={18} />
-          <span className="font-semibold text-yellow-200">
-            Nouvelle prise — mini éditeur
+          <span className="font-semibold text-yellow-500">
+            AJOUTER UNE PISTE
           </span>
         </div>
         <button
@@ -958,7 +957,7 @@ recRegionsRef.current = regions;
       {/* INPUT SELECTION + TIMER / BPM */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between text-xs text-gray-300">
         <div className="flex items-center gap-2 w-full md:w-2/3">
-          <span className="whitespace-nowrap">Entrée audio :</span>
+          <span className="whitespace-nowrap">Entrée</span>
           <select
             value={selectedId ?? ""}
             onChange={(e) => setSelectedId(e.target.value)}
@@ -976,21 +975,14 @@ recRegionsRef.current = regions;
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <Timer size={14} />
-            <span>
-              {formatTime(current)} / {formatTime(duration)}
-            </span>
-          </div>
           <div className="text-yellow-300 text-xs">{bpm} BPM</div>
         </div>
       </div>
 
       {/* BRANCH TRACKS (context) */}
-      <div className="space-y-2 border border-gray-800 bg-black/40 rounded-md p-2">
+      <div className="space-y-2 rounded-md p-2">
         <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
           <span>Pistes existantes de la branche</span>
-          <span>{branchNodes.length} piste(s)</span>
         </div>
 
         {branchNodes.map((node) => (
@@ -1003,7 +995,7 @@ recRegionsRef.current = regions;
               <button
                 onClick={() => toggleMute(node.id)}
                 className="w-7 h-7 flex items-center justify-center 
-                           rounded bg-gray-900 border border-gray-700"
+                           rounded"
               >
                 {muted[node.id] ? (
                   <VolumeX size={14} className="text-red-400" />
@@ -1015,7 +1007,7 @@ recRegionsRef.current = regions;
               <div
                 className="absolute left-1/2 -translate-x-1/2 -top-11 
                            opacity-0 group-hover:opacity-100
-                           transition-opacity bg-black px-3 py-2 rounded-md border border-gray-700 shadow-lg"
+                           transition-opacity px-3 py-2 rounded-md border border-gray-700 shadow-lg"
               >
                 <input
                   type="range"
@@ -1035,7 +1027,7 @@ recRegionsRef.current = regions;
             <div className="flex-1 min-w-0">
               <div
                 id={`inline-branch-wave-${node.id}`}
-                className="w-full h-10 bg-black/70 rounded-sm overflow-hidden pointer-events-none"
+                className="w-full h-10 rounded-sm overflow-hidden pointer-events-none"
                 style={{ transform: "translateZ(0)" }}
               />
             </div>
@@ -1045,7 +1037,7 @@ recRegionsRef.current = regions;
               className="whitespace-nowrap text-right font-semibold min-w-[140px]"
               style={{ color: getNodeColor(node.instrument) }}
             >
-              {node.instrument} — {node.title}
+              {node.title}
             </div>
           </div>
         ))}
@@ -1058,7 +1050,7 @@ recRegionsRef.current = regions;
       </div>
 
       {/* TAKE TRACK + EDITOR */}
-      <div className="space-y-3 border border-yellow-800/60 bg-yellow-950/10 rounded-md p-3">
+      <div className="space-y-3 bg-black-700/10 rounded-md p-3">
         <div className="flex items-center justify-between text-xs text-yellow-200">
           <div className="flex items-center gap-2">
             <span>Nouvelle piste (REC)</span>
@@ -1091,7 +1083,7 @@ recRegionsRef.current = regions;
         </div>
 
         {/* REC waveform */}
-        <div className="w-full h-20 bg-black/70 rounded-sm overflow-hidden">
+        <div className="w-full h-20 bg-red-500/10 rounded-m overflow-hidden">
           <div ref={recWaveContainerRef} className="w-full h-full" />
         </div>
 

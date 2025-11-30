@@ -26,7 +26,7 @@ export function TrackWaveform({
       progressColor: "#fff",
       barWidth: 2,
       height,
-      interact: false,
+      interact: true,
     });
 
     wf.load(url);

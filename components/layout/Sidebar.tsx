@@ -10,9 +10,16 @@ interface SidebarProps {
   topics: Topic[];
 }
 
-export function Sidebar({ topics }: SidebarProps) { const [modalOpen, setModalOpen] = useState(false);
+export function Sidebar({ topics }: SidebarProps) { 
+  const [modalOpen, setModalOpen] = useState(false);
   return (
-    <div className="w-[20%] min-w-[250px] flex flex-col">
+    <div
+className="
+  flex flex-col
+  w-[20%] min-w-[250px]
+  max-[768px]:w-[30%]
+  max-[768px]:min-w-[15%]
+  max-[768px]:max-w-[250px]">
 
       <div className="flex-grow overflow-hidden bg-gray-900/60 p-2 mx-2 bg-blur">
         <TopicList topics={topics} />

@@ -1,14 +1,13 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { Header } from '@/components/layout/Header';
 import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'DRUIDE 500 - Collaborative Music Platform',
-  description: 'A retro-futuristic music collaboration platform for building tree-like musical compositions',
+  title: 'ForkJam',
+  description: 'Collaborative Music Platform',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

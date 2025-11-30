@@ -1,6 +1,9 @@
 "use client";
 
 import React from 'react';
+import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { getUserVoteForNode, toggleNodeVote } from "@/lib/supabase";
+import { useEffect, useState } from "react";
 import { Play, Pause, Plus } from 'lucide-react';
 import { NodeWithUser } from '@/lib/supabase';
 import { useAudioStore } from '@/store/useAudioStore';
@@ -46,37 +49,97 @@ export function NodeCard({ node, isSelected = false, onAddChild, onSelect, allNo
     }
   };
 
-  return (
-    <div 
-      className={cn(
-        instrumentColor,
-        "relative rounded-md border-2 p-3 transition-all duration-300",
-        isSelected && "ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/20",
-        "hover:shadow-md"
-      )}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center">
-          <h3 className="text-lg font-bold tracking-tight">{node.title}</h3>
-        </div>
-        <div className="flex gap-1">
-          <button
-            onClick={handlePlayPause}
-            className="w-8 h-8 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
-          >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-          </button>
-        </div>
-      </div>
+  const handleUpvote = async () => {
+    const next = userVote === 1 ? 0 : 1;
+    setUserVote(next); // optimistic UI
+    await toggleNodeVote(node.id, 1);
+  };
+
+  const handleDownvote = async () => {
+    const next = userVote === -1 ? 0 : -1;
+    setUserVote(next);
+    await toggleNodeVote(node.id, -1);
+  };
+
+  const [userVote, setUserVote] = useState<1 | -1 | 0>(0);
+
+    useEffect(() => {
+      getUserVoteForNode(node.id).then(setUserVote);
+    }, [node.id]);
+
+    const score = (node.note ?? 0) + userVote;
+
+ return (
+  <div
+    className={cn(
+      "relative rounded-lg p-4 transition-all duration-200 shadow-md overflow-hidden",
+      instrumentColor,
+      score > 2 && "brightness-[1.15]",
+      score < -2 && "brightness-[0.75]",
+      "bg-gradient-to-br from-white/10 via-transparent to-black/40",
+      "before:absolute before:inset-0 before:bg-[url('https://grainy-gradients.vercel.app/noise.svg')] before:opacity-[0.08]",
+      isSelected && "ring-2 ring-yellow-400 shadow-yellow-400/20",
       
-      <div className="flex justify-between items-center mt-2 text-xs">
-        <span className="uppercase tracking-wide font-medium">
-          {node.instrument}
-        </span>
-        <span className="opacity-70">
-          {node.users?.username}
-        </span>
+    )}
+  >
+    {/* PLAY BUTTON TOP RIGHT — bigger */}
+    <button
+      onClick={handlePlayPause}
+      className="absolute top-2 right-2 w-11 h-11 rounded-lg bg-black/30 hover:bg-black/40 flex items-center justify-center transition"
+    >
+      {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+    </button>
+
+    {/* TITLE */}
+    <h3 className="text-lg font-extrabold tracking-wide uppercase mb-3 pr-14">
+      {node.title}
+    </h3>
+
+    <div className="flex gap-3">
+
+      {/* LEFT VOTES */}
+      <div className="flex flex-col items-center w-8 mt-1">
+        <button
+          onClick={handleUpvote}
+          className={cn(
+            "w-7 h-7 flex items-center justify-center rounded-sm transition",
+            userVote === 1 ? "bg-yellow-500 text-black" : "bg-black/30 hover:bg-black/40"
+          )}
+        >
+          <ThumbsUp size={14} />
+        </button>
+
+        <span className="text-sm font-bold py-1">{score}</span>
+
+        <button
+          onClick={handleDownvote}
+          className={cn(
+            "w-7 h-7 flex items-center justify-center rounded-sm transition",
+            userVote === -1 ? "bg-red-500 text-black" : "bg-black/30 hover:bg-black/40"
+          )}
+        >
+          <ThumbsDown size={14} />
+        </button>
+      </div>
+
+      {/* RIGHT CONTENT */}
+      <div className="flex flex-col flex-1 justify-end">
+
+        {/* INSTRUMENT + USER AT BOTTOM */}
+        <div className="flex justify-between items-center mt-6 pt-3 border-t border-white/10">
+
+          <span className="px-2 py-1 text-xs rounded-md bg-black/30 border border-white/10 uppercase tracking-wider whitespace-nowrap">
+            {node.instrument}
+          </span>
+
+          <span className="text-xs opacity-80 whitespace-nowrap">
+            {node.users?.username ?? "Unknown"}
+          </span>
+
+        </div>
+
       </div>
     </div>
-  );
+  </div>
+);
 }

@@ -31,6 +31,7 @@ export type Node = {
   user_id: string;
   topic_id: string;
   parent_node_id: string | null;
+  note?: number;
 };
 
 export type Topic = {
@@ -40,6 +41,65 @@ export type Topic = {
   created_at?: string;
   bpm: number;
 };
+
+export async function getUserVoteForNode(nodeId: string): Promise<1 | -1 | 0> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { data } = await supabase
+    .from('votes')
+    .select('value')
+    .eq('user_id', user.id)
+    .eq('target_type', 'node')
+    .eq('target_id', nodeId)
+    .maybeSingle();
+
+  return data?.value ?? 0;
+}
+
+export async function toggleNodeVote(nodeId: string, newValue: 1 | -1) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // Check existing vote
+  const { data: existing } = await supabase
+    .from('votes')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('target_type', 'node')
+    .eq('target_id', nodeId)
+    .maybeSingle();
+
+  // Case 1: same vote → remove
+  if (existing && existing.value === newValue) {
+    await supabase
+      .from('votes')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('target_type', 'node')
+      .eq('target_id', nodeId);
+    return;
+  }
+
+  // Case 2: no vote → insert
+  if (!existing) {
+    await supabase.from('votes').insert({
+      user_id: user.id,
+      target_type: 'node',
+      target_id: nodeId,
+      value: newValue,
+    });
+    return;
+  }
+
+  // Case 3: opposite vote → update
+  await supabase
+    .from('votes')
+    .update({ value: newValue })
+    .eq('user_id', user.id)
+    .eq('target_type', 'node')
+    .eq('target_id', nodeId);
+}
 
 export async function getTopics(): Promise<Topic[]> {
   const { data, error } = await supabase

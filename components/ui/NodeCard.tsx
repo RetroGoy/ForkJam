@@ -128,7 +128,7 @@ export function NodeCard({ node, isSelected = false, onAddChild, onSelect, allNo
         {/* INSTRUMENT + USER AT BOTTOM */}
         <div className="flex justify-between items-center mt-6 pt-3 border-t border-white/10">
 
-          <span className="px-2 py-1 text-xs rounded-md bg-black/30 border border-white/10 uppercase tracking-wider whitespace-nowrap">
+          <span className="px-2 py-1 mr-2 text-xs rounded-md bg-black/30 border border-white/10 uppercase tracking-wider whitespace-nowrap">
             {node.instrument}
           </span>
 

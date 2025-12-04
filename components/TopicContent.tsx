@@ -1,164 +1,135 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { NodeGraph } from '@/components/ui/NodeGraph';
-import { BranchTimelinePlayer } from "@/components/ui/branchTimelinePlayer";
-import { Topic, Node, getTopics, createNode, uploadAudio } from '@/lib/supabase';
-import { useTopicStore } from '@/store/useTopicStore';
-import { useAudioStore } from '@/store/useAudioStore';
-import { Plus, X, Music } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { User } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
-import { Header } from '@/components/layout/Header';
+import { useState, useEffect } from "react";
+import { NodeGraph } from "@/components/graph/NodeGraph";
+import { RecorderModal } from "@/components/recorder/RecorderModal";
+import { BranchTimelinePlayer } from "@/components/audio/ui/BranchTimelinePlayer";
+import type { Node } from "@/lib/supabase/supabase";
+import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
+import { getBranchFrom } from "@/lib/utils/getBranchFrom";
 
-interface TopicContentProps {
-  initialTopic: Topic;
+const SIDEBAR_WIDTH = 260;
+
+export function TopicContent({
+  rootNode,
+  initialNodes,
+}: {
+  rootNode: Node;
   initialNodes: Node[];
-}
-
-export function TopicContent({ initialTopic, initialNodes }: TopicContentProps) {
-  const { topics, setTopics } = useTopicStore(state => ({ 
-    topics: state.topics, 
-    setTopics: (topics: Topic[]) => state.topics = topics 
-  }));
-  
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [topic, setTopic] = useState<Topic>(initialTopic);
+}) {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [parentNode, setParentNode] = useState<Node | null>(null);
-  const [newNodeData, setNewNodeData] = useState({
-    title: '',
-    instrument: 'Synth',
-  });
-  
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    };
-  
-    getUser();
-  }, [setTopics, topics]);
+  const [loading, setLoading] = useState(false);
 
-  // Initialize topics if not already set
-  useEffect(() => {
-    if (topics.length === 0) {
-      getTopics().then(fetchedTopics => {
-        setTopics(fetchedTopics);
-      });
-    }
-  }, [setTopics, topics]);
-  
-  const handleNodeSelect = (node: Node) => {
-    setSelectedNode(node);
-  };
-  
-  const handleAddChildClick = (node: Node) => {
-    setParentNode(node);
-    setIsRecording(true);
-  };
-  
-  const handleSaveRecording = async (blob: Blob) => {
-    if (!parentNode && !topic) return;
-    
-    setIsSubmitting(true);
-    
+  const [recorderOpen, setRecorderOpen] = useState(false);
+  const [recorderParentId, setRecorderParentId] = useState<string | null>(null);
+
+  const audio = useAudioEngine();
+    useEffect(() => {
+      audio.init();
+    }, []);
+
+  const refreshNodes = async () => {
+    setLoading(true);
     try {
-      // Generate a unique path for the audio file
-      const fileName = `${uuidv4()}.mp3`;
-      const filePath = `${topic.id}/${fileName}`;
-      
-      // Upload the audio file to Supabase storage
-      const audioUrl = await uploadAudio(blob, filePath);
-      
-      if (!audioUrl) {
-        throw new Error('Failed to upload audio');
-      }
-      
-      // Create a new node in the database
-      const newNode: Omit<Node, 'id' | 'created_at'> = {
-        title: newNodeData.title || 'Untitled',
-        audio_url: audioUrl,
-        instrument: newNodeData.instrument,
-        topic_id: topic.id,
-        parent_node_id: parentNode ? parentNode.id : null,
-        user_id: 'anonymous', // Replace with actual user ID when auth is implemented
-      };
-      
-      const createdNode = await createNode(newNode);
-      
-      if (createdNode) {
-        // Add the new node to the local state
-        setNodes(prev => [...prev, createdNode]);
-      }
-      
-      // Reset state
-      setIsRecording(false);
-      setParentNode(null);
-      setNewNodeData({
-        title: '',
-        instrument: 'Synth',
-      });
-    } catch (error) {
-      console.error('Error saving recording:', error);
+      const res = await fetch(`/api/nodes?root=${rootNode.id}`);
+      const data = await res.json();
+      setNodes(data);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
-  
-  const handleCancelRecording = () => {
-    setIsRecording(false);
-    setParentNode(null);
+
+  const handleAddChild = (parent: Node) => {
+    setRecorderParentId(parent.id);
+    setRecorderOpen(true);
   };
+
+  const handleCreated = (node: Node) => {
+    setNodes((prev) => [...prev, node]);
+  };
+
+const handleNodeSelect = async (node: Node) => {
+  setSelectedNode(node);
+
+  const newBranchNodes = getBranchFrom(nodes, node.id);
+  const newBranch = newBranchNodes.map((n) => ({
+    id: n.id,
+    audio_url: n.audio_url,
+  }));
+
+  const currentBranchIds = audio.branch.map((b) => b.id);
+  const newIds = newBranch.map((b) => b.id);
+
+  const sameBranch =
+    currentBranchIds.length === newIds.length &&
+    currentBranchIds.every((id, idx) => id === newIds[idx]);
+
+  if (sameBranch) {
+    // toggle play / pause
+    if (audio.isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    return;
+  }
+
+  // nouvelle branche → on charge et on joue depuis le début
+  await audio.loadBranch(newBranch);
+  audio.play();
+};
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden m-0">
-    <div className="absolute inset-0 z-10">
-      <NodeGraph
-        nodes={nodes}
-        onNodeSelect={handleNodeSelect}
-        onAddChild={handleAddChildClick}
-        topic={topic}
-        user={currentUser}
-        refreshNodes={async () => {
-          const { data: refreshedNodes } = await supabase
-            .from('nodes')
-            .select('*')
-            .eq('topic_id', topic.id);
-          if (refreshedNodes) setNodes(refreshedNodes);
-        }}
-      />
+    <div className="flex h-screen">
+      {/* SIDEBAR */}
+      <div
+        className="h-full shrink-0 bg-black/40 border-r border-yellow-900/20"
+        style={{ width: SIDEBAR_WIDTH }}
+      >
+        {/* ton vrai sidebar ici */}
+      </div>
+
+      {/* MAIN */}
+      <div className="flex-1 overflow-hidden relative">
+        {/* GRAPH */}
+        <div className="absolute inset-0 z-10">
+          <NodeGraph
+            nodes={nodes}
+            topic={rootNode}
+            user={null}
+            refreshNodes={refreshNodes}
+            onNodeSelect={handleNodeSelect}
+            onAddChild={handleAddChild}
+            selectedNodeId={selectedNode?.id ?? null}
+          />
+        </div>
+
+        {/* BACKGROUND BRANCH TIMELINE */}
+        {selectedNode && (
+          <div className="absolute inset-0 z-0 pointer-events-none">
+            <BranchTimelinePlayer sidebarWidth={SIDEBAR_WIDTH} />
+          </div>
+        )}
+
+        {/* LOADING */}
+        {loading && (
+          <div className="absolute inset-0 z-[100] bg-black/40 flex items-center justify-center">
+            <div className="animate-spin h-6 w-6 border-t-2 border-yellow-400 rounded-full" />
+          </div>
+        )}
+
+        {/* RECORDER */}
+        <RecorderModal
+          open={recorderOpen}
+          onClose={() => setRecorderOpen(false)}
+          parentId={recorderParentId}
+          isRoot={false}
+          bpm={rootNode.bpm ?? 120}
+          onCreated={handleCreated}
+        />
+
+      </div>
     </div>
-
-    {/* Fixed Header */}
-    <header className="fixed top-0 left-0 right-0 z-20">
-      <Header />
-    </header>
-
-    {/* Fixed Sidebar — collapses on small screens */}
-    <aside className="fixed top-32 left-0 bottom-0 z-10 h-[calc(100vh-4rem)] w-[20%] min-w-[250px]">
-      <Sidebar topics={topics} />
-    </aside>
-
-    {/* Topic title bar — centered bottom */}
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-20 w-max -translate-x-1/2 text-center">
-      <h1 className="text-xl font-bold text-yellow-100">{topic.title}</h1>
-      {topic.description && <p className="text-sm text-gray-300">{topic.description}</p>}
-    </div>
-    
-{/* Branch timeline as background */}
-<div className="pointer-events-none fixed inset-0 z-[5] opacity-80">
-  <BranchTimelinePlayer
-    allNodes={nodes}
-    selectedNode={selectedNode}
-    topicBpm={topic.bpm}
-  />
-</div>
-  </div>
   );
 }

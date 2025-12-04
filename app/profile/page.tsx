@@ -1,52 +1,70 @@
 "use client";
-import { useUser } from "@/store/useUser";
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { Node } from '@/lib/supabase';
-import { LogOut, Music, Clock } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/supabase";
+import AvatarUploader from "@/app/profile/avatarUloader";
 
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [userNodes, setUserNodes] = useState<Node[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+  const [topics, setTopics] = useState<any[]>([]);
+  const [nodes, setNodes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkUser = async () => {
+    const load = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (!session) {
-        router.push('/auth');
+        router.push("/auth");
         return;
       }
-      
-      setUser(session.user);
-      
-      // Fetch user's nodes
-      const { data: nodes } = await supabase
-        .from('nodes')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-        
-      setUserNodes(nodes || []);
+
+      const authUser = session.user;
+      setUser(authUser);
+
+      // Fetch profile row
+      const { data: userDb } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
+
+      setProfile(userDb);
+
+      // Fetch topics
+      const { data: topicData } = await supabase
+        .from("topics")
+        .select("*")
+        .eq("user_id", authUser.id)
+        .order("created_at", { ascending: false });
+
+      setTopics(topicData || []);
+
+      // Fetch nodes
+      const { data: nodeData } = await supabase
+        .from("nodes")
+        .select("*, topics(title)")
+        .eq("user_id", authUser.id)
+        .order("created_at", { ascending: false });
+
+      setNodes(nodeData || []);
+
       setIsLoading(false);
     };
 
-    checkUser();
+    load();
   }, []);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+  const handleAvatarUpdate = (url: string) => {
+    setProfile((p: any) => ({ ...p, avatar_url: url }));
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="h-12 w-12 rounded-full border-t-2 border-b-2 border-yellow-400 animate-spin"></div>
       </div>
     );
   }
@@ -54,59 +72,65 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-gray-800 rounded-lg p-6 mb-8 border border-yellow-900/30">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-primary mb-2">
-                {user?.email.split('@')[0].toUpperCase()}
-              </h1>
-              <p className="text-gray-400">{user?.email}</p>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 bg-red-900/30 hover:bg-red-900/50 text-red-300 px-4 py-2 rounded-md transition-colors"
-            >
-              <LogOut size={18} />
-              <span>Sign Out</span>
-            </button>
+
+        {/* INFO HEADER */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8 border border-yellow-900/30 flex gap-6">
+          
+          {/* Avatar */}
+          <div>
+            <img
+              src={profile?.avatar_url || "/default-avatar.png"}
+              className="w-24 h-24 rounded-full object-cover border border-yellow-700 shadow"
+            />
+            <AvatarUploader user={user} onUpload={handleAvatarUpdate} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-700/50 p-4 rounded-md">
-              <div className="flex items-center gap-2 text-yellow-400 mb-2">
-                <Music size={18} />
-                <h2 className="font-semibold">Your Contributions</h2>
-              </div>
-              <p className="text-2xl font-bold text-gray-200">{userNodes.length}</p>
-            </div>
-            <div className="bg-gray-700/50 p-4 rounded-md">
-              <div className="flex items-center gap-2 text-yellow-400 mb-2">
-                <Clock size={18} />
-                <h2 className="font-semibold">Member Since</h2>
-              </div>
-              <p className="text-gray-200">
-                {new Date(user?.created_at).toLocaleDateString()}
-              </p>
-            </div>
+          {/* User info */}
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-yellow-400 mb-2">
+              {profile?.username || user.email.split("@")[0]}
+            </h1>
+            <p className="text-gray-400">{profile?.email}</p>
+            <p className="text-gray-500 mt-2">
+              Member since {new Date(profile?.created_at).toLocaleDateString()}
+            </p>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-primary mb-4">Recent Contributions</h2>
-          {userNodes.map((node: any) => (
+        {/* TOPICS */}
+        <h2 className="text-xl text-yellow-400 font-bold mb-4">Your Topics</h2>
+        <div className="space-y-3 mb-10">
+          {topics.map((t) => (
             <div
-              key={node.id}
-              className="bg-gray-800 rounded-lg p-4 border border-yellow-900/30"
+              key={t.id}
+              onClick={() => router.push(`/topic/${t.id}`)}
+              className="cursor-pointer bg-gray-800 border border-yellow-900/30 hover:bg-gray-700 transition p-4 rounded-lg"
             >
-              <h3 className="font-semibold text-gray-200 mb-2">{node.title}</h3>
-              <div className="flex gap-4 text-sm text-gray-400">
-                <span>{node.instrument}</span>
-                <span>{node.bpm} BPM</span>
-                <span>{new Date(node.created_at).toLocaleDateString()}</span>
+              <h3 className="text-gray-200 font-semibold">{t.title}</h3>
+              <p className="text-gray-400 text-sm">{t.description}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* NODES */}
+        <h2 className="text-xl text-yellow-400 font-bold mb-4">Your Nodes</h2>
+        <div className="space-y-3">
+          {nodes.map((n) => (
+            <div
+              key={n.id}
+              onClick={() => router.push(`/topic/${n.topic_id}`)}
+              className="cursor-pointer bg-gray-800 border border-yellow-900/30 hover:bg-gray-700 transition p-4 rounded-lg"
+            >
+              <h3 className="font-semibold text-gray-100">{n.title}</h3>
+              <div className="text-gray-400 text-sm flex gap-4">
+                <span>{n.instrument}</span>
+                <span>{n.bpm} BPM</span>
+                <span>{n.topics?.title ? `From: ${n.topics.title}` : ""}</span>
               </div>
             </div>
           ))}
         </div>
+
       </div>
     </div>
   );

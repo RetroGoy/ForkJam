@@ -1,4 +1,4 @@
-import { Node } from "@/lib/supabase";
+import { Node } from "@/lib/supabase/supabase";
 
 export function getBranchFrom(nodes: Node[], startNodeId: string): Node[] {
   const branch: Node[] = [];

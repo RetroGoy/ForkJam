@@ -3,11 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { getTopics, supabase } from '@/lib/supabase';
+import { getTopics, supabase } from '@/lib/supabase/supabase';
 import { useTopicStore } from '@/store/useTopicStore';
 import { Save, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { Topic } from '@/lib/supabase';
+import { Topic } from '@/lib/supabase/supabase';
 
 export default function NewTopicPage() {
   const router = useRouter();

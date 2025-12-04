@@ -6,7 +6,7 @@ export async function createNode(nodeData: {
   audio_url: string;
   topic_id: string;
   parent_node_id: string | null;
-  user_id: string;
+  user_id: string | null;
 }) {
   const { data, error } = await supabase
     .from("nodes")

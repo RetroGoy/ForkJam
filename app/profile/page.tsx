@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/supabase";
-import AvatarUploader from "@/app/profile/avatarUloader";
+import AvatarUploader from "@/app/profile/avatarUploader";
 
 export default function ProfilePage() {
   const router = useRouter();

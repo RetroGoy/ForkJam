@@ -7,6 +7,10 @@ const nextConfig = {
   },
 
   serverExternalPackages: ["bufferutil", "utf-8-validate"],
+  
+    experimental: {
+    turbo: false
+  }
 };
 
 export default nextConfig;

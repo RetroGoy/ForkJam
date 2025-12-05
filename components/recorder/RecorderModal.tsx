@@ -15,9 +15,20 @@ import {
 import toast from "react-hot-toast";
 
 import { RecorderEngine } from "../audio/engine/RecorderEngine";
-import { supabase, uploadAudio, type Node, createNode } from "@/lib/supabase/supabase";
+import {
+  supabase,
+  uploadAudio,
+  type Node,
+  createNode,
+} from "@/lib/supabase/supabase";
+import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 
 type RecorderMode = "idle" | "recording" | "editing";
+
+type BranchNode = {
+  id: string;
+  audio_url: string | null;
+};
 
 interface RecorderModalProps {
   open: boolean;
@@ -32,6 +43,9 @@ interface RecorderModalProps {
   initialTitle?: string;
   initialInstrument?: string;
 
+  // branch des parents à lire pendant record / preview
+  branch?: BranchNode[];
+
   onCreated?: (node: Node) => void;
 }
 
@@ -42,6 +56,24 @@ const formatTime = (seconds: number) => {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 };
 
+const INSTRUMENT_OPTIONS = [
+  "guitar",
+  "bass",
+  "piano",
+  "drums",
+  "vocals",
+  "synth",
+  "pad",
+  "strings",
+  "brass",
+  "saxophone",
+  "trumpet",
+  "flute",
+  "percussion",
+  "fx",
+  "other",
+];
+
 export const RecorderModal: React.FC<RecorderModalProps> = ({
   open,
   onClose,
@@ -50,10 +82,13 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   bpm = null,
   initialTitle = "",
   initialInstrument = "",
+  branch = [],
   onCreated,
 }) => {
-const [title, setTitle] = useState(isRoot ? "Root Track" : initialTitle);
-const [instrument, setInstrument] = useState(isRoot ? "main" : initialInstrument);
+  const [title, setTitle] = useState(isRoot ? "Root Track" : initialTitle);
+  const [instrument, setInstrument] = useState(
+    isRoot ? "guitar" : initialInstrument || "guitar"
+  );
 
   const [mode, setMode] = useState<RecorderMode>("idle");
   const [currentTime, setCurrentTime] = useState(0);
@@ -65,80 +100,88 @@ const [instrument, setInstrument] = useState(isRoot ? "main" : initialInstrument
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
 
-  const [distortion, setDistortion] = useState(false);
-  const [lowpass, setLowpass] = useState(false);
   const [gain, setGain] = useState(1);
 
   const [isSaving, setIsSaving] = useState(false);
   const [hasBlob, setHasBlob] = useState(false);
 
+  const [countdown, setCountdown] = useState<number | null>(null);
+
   const engineRef = useRef<RecorderEngine | null>(null);
   const waveformRef = useRef<HTMLDivElement | null>(null);
 
-// INIT ENGINE (stable)
-useEffect(() => {
-  if (!open) return;
+  // AudioEngine global (parents)
+  const audio = useAudioEngine();
 
-  let engine = new RecorderEngine();
-  engineRef.current = engine;
-
-  // attach waveform container si déjà rendu
-  if (waveformRef.current) {
-    engine.attachWaveform(waveformRef.current);
-  }
-
-  // events
-  engine.on("record-start", () => {
-    setMode("recording");
-    setCurrentTime(0);
-    setDuration(0);
-    setHasBlob(false);
-  });
-
-  engine.on("record-stop", () => {
-
-  console.log("record stopped");
-    // enregistrement terminé, waveform pas encore ready
-    // on attend "ready"
-  });
-
-engine.on("ready", (dur: number) => {
-  setDuration(dur);
-  setTrimStart(0);
-  setTrimEnd(dur);
-  setMode("editing");
-  setHasBlob(true);
-});
-
-  engine.on("tick", (t: number) => setCurrentTime(t));
-  engine.on("trim-change", (s, e) => {
-    setTrimStart(s);
-    setTrimEnd(e);
-  });
-
-  engine.on("play", () => setIsPlaying(true));
-  engine.on("stop", () => setIsPlaying(false));
-
-  // load devices
-  (async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const list = await navigator.mediaDevices.enumerateDevices();
-      const inputs = list.filter((d) => d.kind === "audioinput");
-      setDevices(inputs);
-      if (inputs[0]) setSelectedDeviceId(inputs[0].deviceId);
-      stream.getTracks().forEach((t) => t.stop());
-    } catch (e) {
-      console.error("Micro error", e);
+  // Stoppe l'audio global dès qu'on ouvre la modale
+  useEffect(() => {
+    if (open) {
+      audio.stop();
     }
-  })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  return () => {
-    // nettoyer SANS reset mode etc.
-    engine.destroy();
-    engineRef.current = null;
-  };
-}, [open]);
+  // INIT ENGINE (stable)
+  useEffect(() => {
+    if (!open) return;
+
+    let engine = new RecorderEngine();
+    engineRef.current = engine;
+
+    // attach waveform container si déjà rendu
+    if (waveformRef.current) {
+      engine.attachWaveform(waveformRef.current);
+    }
+
+    // events
+    engine.on("record-start", () => {
+      setMode("recording");
+      setCurrentTime(0);
+      setDuration(0);
+      setHasBlob(false);
+    });
+
+    engine.on("record-stop", () => {
+      // on attend "ready" pour passer en editing
+      console.log("Recorder: record-stop");
+    });
+
+    engine.on("ready", (dur: number) => {
+      setDuration(dur);
+      setTrimStart(0);
+      setTrimEnd(dur);
+      setMode("editing");
+      setHasBlob(true);
+    });
+
+    engine.on("tick", (t: number) => setCurrentTime(t));
+    engine.on("trim-change", (s, e) => {
+      setTrimStart(s);
+      setTrimEnd(e);
+    });
+
+    engine.on("play", () => setIsPlaying(true));
+    engine.on("stop", () => setIsPlaying(false));
+
+    // load devices
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const list = await navigator.mediaDevices.enumerateDevices();
+        const inputs = list.filter((d) => d.kind === "audioinput");
+        setDevices(inputs);
+        if (inputs[0]) setSelectedDeviceId(inputs[0].deviceId);
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (e) {
+        console.error("Micro error", e);
+      }
+    })();
+
+    return () => {
+      engine.destroy();
+      engineRef.current = null;
+    };
+  }, [open]);
 
   // re-attach waveform if ref arrives after engine
   useEffect(() => {
@@ -146,50 +189,112 @@ engine.on("ready", (dur: number) => {
     const engine = engineRef.current;
     if (engine && waveformRef.current) {
       engine.attachWaveform(waveformRef.current);
-      if (hasBlob) {
-        // reload already loaded blob into new container handled by engine
-      }
     }
-  }, [open, waveformRef.current]);
+  }, [open, waveformRef]);
 
-  // FX sync
+  // Countdown → déclenche record + parents au moment 0
   useEffect(() => {
+    if (!open) return;
+    if (countdown === null) return;
+
+    if (countdown === 0) {
+      setCountdown(null);
+      void startRecordingWithParents();
+      return;
+    }
+
+    const t = setTimeout(() => {
+      setCountdown((c) => (c === null ? null : c - 1));
+    }, 1000);
+
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown, open]);
+
+  const startRecordingWithParents = async () => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.updateFX({ distortion, lowpass, gain });
-  }, [distortion, lowpass, gain]);
+
+    try {
+      setMode("recording");
+      setCurrentTime(0);
+      setDuration(0);
+      setHasBlob(false);
+
+      // charge les parents dans l'audio engine et joue
+      if (branch && branch.length > 0) {
+        await audio.loadBranch(branch);
+        audio.play();
+      } else {
+        audio.stop();
+      }
+
+      await engine.startRecording(
+        bpm ?? undefined,
+        selectedDeviceId || undefined
+        );
+    } catch (err) {
+      console.error("Error starting recording", err);
+      toast.error("Erreur lors de l'accès au micro");
+      setMode("idle");
+      audio.stop();
+    }
+  };
 
 const handleStartRecording = async () => {
   const engine = engineRef.current;
   if (!engine) return;
 
   try {
-    // on passe tout de suite en mode "recording"
     setMode("recording");
     setCurrentTime(0);
     setDuration(0);
     setHasBlob(false);
 
-    await engine.startRecording(selectedDeviceId || undefined);
+    // BPM réel (depuis ton topic)
+    const bpmToUse =
+      typeof bpm === "number" && bpm > 0 ? bpm : 120;
+
+    // IMPORTANT : premier argument = BPM, second = deviceId
+    await engine.startRecording(bpmToUse, selectedDeviceId || undefined);
+
   } catch (err) {
     console.error("Error starting recording", err);
     toast.error("Erreur lors de l'accès au micro");
-    // si erreur, on revient en idle
     setMode("idle");
+    audio.stop();
   }
 };
 
   const handleStopRecording = () => {
     engineRef.current?.stopRecording();
+    audio.stop();
   };
 
-  const handlePlay = () => {
+  const handlePlay = async () => {
     if (!hasBlob) return;
-    engineRef.current?.play();
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    // PREVIEW = PARENTS + ENREGISTREMENT
+    try {
+      if (branch && branch.length > 0) {
+        await audio.loadBranch(branch);
+        audio.play();
+      } else {
+        audio.stop();
+      }
+
+      engine.play();
+    } catch (err) {
+      console.error("Error play preview", err);
+      toast.error("Erreur lecture preview");
+    }
   };
 
   const handleStopPlay = () => {
     engineRef.current?.stop();
+    audio.stop();
   };
 
   const handleSave = async () => {
@@ -233,24 +338,22 @@ const handleStartRecording = async () => {
       }
 
       const { start, end } = engine.getTrim();
-        const isRootNode = isRoot === true;
+      const isRootNode = isRoot === true;
+      const parent = isRootNode ? null : parentId;
 
-        const parent = isRootNode ? null : parentId;
-        const payload: Partial<Node> = {
+      const payload: Partial<Node> = {
         title,
         description: null,
         audio_url: publicUrl,
         instrument,
-
         parent_node_id: parent,
         is_root: isRootNode,
-        bpm: isRootNode ? (bpm ?? 120) : null,
-
+        bpm: isRootNode ? bpm ?? 120 : null,
         tag: null,
         location: null,
         note: 0,
         user_id: user.id,
-        };
+      };
 
       const newNode = await createNode(payload);
       if (!newNode) {
@@ -272,6 +375,7 @@ const handleStartRecording = async () => {
 
   const handleClose = () => {
     if (isSaving) return;
+    audio.stop();
     onClose();
   };
 
@@ -298,7 +402,8 @@ const handleStartRecording = async () => {
             </span>
             {typeof bpm === "number" && (
               <span className="text-[11px] text-gray-400">
-                BPM: <span className="text-yellow-300 font-semibold">{bpm}</span>
+                BPM:{" "}
+                <span className="text-yellow-300 font-semibold">{bpm}</span>
               </span>
             )}
           </div>
@@ -316,6 +421,15 @@ const handleStartRecording = async () => {
           </div>
         </div>
 
+        {/* COUNTDOWN OVERLAY */}
+        {countdown !== null && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="text-5xl font-bold text-yellow-400">
+              {countdown === 0 ? "GO" : countdown}
+            </div>
+          </div>
+        )}
+
         {/* TITLE + INSTRUMENT */}
         <div className="flex flex-col md:flex-row gap-3 mb-3">
           <input
@@ -324,15 +438,20 @@ const handleStartRecording = async () => {
             onChange={(e) => setTitle(e.target.value)}
             className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
           />
-          <input
-            placeholder="Instrument (guitar, vocal...)"
+          <select
             value={instrument}
             onChange={(e) => setInstrument(e.target.value)}
             className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-          />
+          >
+            {INSTRUMENT_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt.toUpperCase()}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* INPUT + TIMER */}
+        {/* INPUT + TIMER + MONITOR */}
         <div className="flex flex-col md:flex-row gap-3 mb-3 text-xs text-gray-300 items-center justify-between">
           <div className="flex items-center gap-2 w-full md:w-2/3">
             <span className="whitespace-nowrap">Input</span>
@@ -354,9 +473,7 @@ const handleStartRecording = async () => {
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1 text-yellow-300">
-              <span className="text-[11px] uppercase tracking-wide">
-                TIME
-              </span>
+              <span className="text-[11px] uppercase tracking-wide">TIME</span>
               <span className="font-mono text-sm">
                 {formatTime(currentTime)} / {formatTime(duration)}
               </span>
@@ -373,59 +490,7 @@ const handleStartRecording = async () => {
               style={{ transform: "translateZ(0)" }}
             />
           </div>
-          {hasRecording && (
-            <div className="mt-2 text-[11px] text-gray-300 flex justify-between">
-              <span>
-                Selected: {formatTime(trimStart)} → {formatTime(trimEnd)} (
-                {formatTime(Math.max(trimEnd - trimStart, 0))})
-              </span>
-            </div>
-          )}
         </div>
-
-        {/* FX */}
-        {hasRecording && (
-          <div className="mb-4 flex flex-col gap-3 text-xs text-gray-300">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={14} />
-              <span className="text-gray-400">Effects</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-4 justify-between">
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={distortion}
-                    onChange={(e) => setDistortion(e.target.checked)}
-                    className="accent-yellow-400"
-                  />
-                  Distortion
-                </label>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={lowpass}
-                    onChange={(e) => setLowpass(e.target.checked)}
-                    className="accent-yellow-400"
-                  />
-                  Low-pass
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <span>Gain</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={gain}
-                  onChange={(e) => setGain(parseFloat(e.target.value))}
-                  className="w-32"
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* CONTROLS */}
         <div className="flex flex-col md:flex-row gap-3 items-center justify-between mt-2">
@@ -434,6 +499,7 @@ const handleStartRecording = async () => {
               <button
                 onClick={handleStartRecording}
                 className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-700 hover:bg-red-800 text-white text-sm font-medium"
+                disabled={countdown !== null}
               >
                 <Mic size={16} />
                 <span>Record</span>

@@ -1,12 +1,15 @@
-export function getNodeColor(instrument: string) {
-  const lower = instrument.toLowerCase();
+export function getNodeColor(instr: string | null) {
+  const val = instr?.toLowerCase() ?? "";
+  if (!val) return "bg-purple-600 border-purple-500 text-purple-100";
 
-  if (lower.includes("piano") || lower.includes("synth"))
-    return "#16a34a"; // green-600
-  if (lower.includes("guitar") || lower.includes("bass"))
-    return "#dc2626"; // red-600
-  if (lower.includes("drum") || lower.includes("perc"))
-    return "#2563eb"; // blue-600
-  
-  return "#7c3aed"; // purple-600
+  if (val.includes("piano") || val.includes("synth"))
+    return "bg-green-600 border-green-500 text-green-100";
+
+  if (val.includes("guitar") || val.includes("bass"))
+    return "bg-red-600 border-red-500 text-red-100";
+
+  if (val.includes("drum") || val.includes("percussion"))
+    return "bg-blue-600 border-blue-500 text-blue-100";
+
+  return "bg-purple-600 border-purple-500 text-purple-100";
 }

@@ -10,6 +10,11 @@ import { getBranchFrom } from "@/lib/utils/getBranchFrom";
 
 const SIDEBAR_WIDTH = 260;
 
+type BranchNode = {
+  id: string;
+  audio_url: string | null;
+};
+
 export function TopicContent({
   rootNode,
   initialNodes,
@@ -23,11 +28,14 @@ export function TopicContent({
 
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [recorderParentId, setRecorderParentId] = useState<string | null>(null);
+  const [recorderBranch, setRecorderBranch] = useState<BranchNode[]>([]);
 
   const audio = useAudioEngine();
-    useEffect(() => {
-      audio.init();
-    }, []);
+
+  useEffect(() => {
+    audio.init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refreshNodes = async () => {
     setLoading(true);
@@ -41,7 +49,18 @@ export function TopicContent({
   };
 
   const handleAddChild = (parent: Node) => {
+    // stoppe la lecture globale dès qu'on passe en mode rec
+    audio.stop();
+
     setRecorderParentId(parent.id);
+
+    const branchNodes = getBranchFrom(nodes, parent.id);
+    const branch: BranchNode[] = branchNodes.map((n) => ({
+      id: n.id,
+      audio_url: n.audio_url,
+    }));
+    setRecorderBranch(branch);
+
     setRecorderOpen(true);
   };
 
@@ -49,36 +68,35 @@ export function TopicContent({
     setNodes((prev) => [...prev, node]);
   };
 
-const handleNodeSelect = async (node: Node) => {
-  setSelectedNode(node);
+  const handleNodeSelect = async (node: Node) => {
+    setSelectedNode(node);
 
-  const newBranchNodes = getBranchFrom(nodes, node.id);
-  const newBranch = newBranchNodes.map((n) => ({
-    id: n.id,
-    audio_url: n.audio_url,
-  }));
+    const newBranchNodes = getBranchFrom(nodes, node.id);
+    const newBranch = newBranchNodes.map((n) => ({
+      id: n.id,
+      audio_url: n.audio_url,
+    }));
 
-  const currentBranchIds = audio.branch.map((b) => b.id);
-  const newIds = newBranch.map((b) => b.id);
+    const currentBranchIds = audio.branch.map((b) => b.id);
+    const newIds = newBranch.map((b) => b.id);
 
-  const sameBranch =
-    currentBranchIds.length === newIds.length &&
-    currentBranchIds.every((id, idx) => id === newIds[idx]);
+    const sameBranch =
+      currentBranchIds.length === newIds.length &&
+      currentBranchIds.every((id, idx) => id === newIds[idx]);
 
-  if (sameBranch) {
-    // toggle play / pause
-    if (audio.isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
+    if (sameBranch) {
+      // toggle play / pause
+      if (audio.isPlaying) {
+        audio.pause();
+      } else {
+        audio.play();
+      }
+      return;
     }
-    return;
-  }
 
-  // nouvelle branche → on charge et on joue depuis le début
-  await audio.loadBranch(newBranch);
-  audio.play();
-};
+    await audio.loadBranch(newBranch);
+    audio.play();
+  };
 
   return (
     <div className="flex h-screen">
@@ -108,7 +126,10 @@ const handleNodeSelect = async (node: Node) => {
         {/* BACKGROUND BRANCH TIMELINE */}
         {selectedNode && (
           <div className="absolute inset-0 z-0 pointer-events-none">
-            <BranchTimelinePlayer sidebarWidth={SIDEBAR_WIDTH} />
+            <BranchTimelinePlayer
+              selectedNode={selectedNode}
+              allNodes={nodes}
+            />
           </div>
         )}
 
@@ -127,8 +148,8 @@ const handleNodeSelect = async (node: Node) => {
           isRoot={false}
           bpm={rootNode.bpm ?? 120}
           onCreated={handleCreated}
+          branch={recorderBranch}
         />
-
       </div>
     </div>
   );

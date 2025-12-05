@@ -2,7 +2,12 @@
 
 import { useEffect, useRef } from "react";
 
-export default function TrackWaveform({ buffer }: { buffer: AudioBuffer | null }) {
+interface TrackWaveformProps {
+  buffer: AudioBuffer | null;
+  color?: string; // ← NOUVEAU
+}
+
+export default function TrackWaveform({ buffer, color = "#facc15" }: TrackWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -15,15 +20,16 @@ export default function TrackWaveform({ buffer }: { buffer: AudioBuffer | null }
 
     const samples = buffer.getChannelData(0);
 
-    // Nombre de barres (plus large = plus "TikTok")
+    // Style (TikTok bars)
     const BAR_WIDTH = 6;
     const GAP = 2;
     const bars = Math.floor(width / (BAR_WIDTH + GAP));
-
     const step = Math.floor(samples.length / bars);
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "rgba(250, 204, 21, 0.95)"; // jaune fort
+
+    // 👇 Couleur dynamique
+    ctx.fillStyle = color;
 
     for (let i = 0; i < bars; i++) {
       let peak = 0;
@@ -43,7 +49,7 @@ export default function TrackWaveform({ buffer }: { buffer: AudioBuffer | null }
         normalized
       );
     }
-  }, [buffer]);
+  }, [buffer, color]);
 
   return (
     <canvas

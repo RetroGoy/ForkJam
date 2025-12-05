@@ -1,7 +1,7 @@
-// components/recorder/RecorderEngine.ts
+// components/audio/engine/RecorderEngine.ts
 // ------------------------------------------------------------
 // PURE ENGINE – no React, no JSX.
-// Handles recording, playback, FX, trimming, metronome, timeline syncing.
+// Handles recording, playback, trimming, metronome, timeline syncing.
 // UI must call attachWaveform(container) to render the waveform.
 // ------------------------------------------------------------
 
@@ -34,33 +34,29 @@ export class RecorderEngine {
   private waveform: WaveSurfer | null = null;
   private regions: any = null;
 
-  // --------- audio graph ---------
-  private audioContext: AudioContext | null = null;
+  // --------- playback ------------
   private audioEl: HTMLAudioElement | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
-  private distortionNode: WaveShaperNode | null = null;
-  private lowpassNode: BiquadFilterNode | null = null;
-  private gainNode: GainNode | null = null;
 
   // --------- state ---------------
   private duration = 0;
   private trimStart = 0;
   private trimEnd = 0;
 
-  private fxDistortion = false;
-  private fxLowpass = false;
-  private fxGain = 1;
-
   private raf: number | null = null;
+
+  // --------- metronome -----------
+  private metroCtx: AudioContext | null = null;
+  private metroIntervalId: number | null = null;
+  private metroBpm = 120;
 
   // --------- events --------------
   private listeners: Record<RecorderEvent, Listener[]> = {
-    "ready": [],
+    ready: [],
     "record-start": [],
     "record-stop": [],
-    "play": [],
-    "stop": [],
-    "tick": [],
+    play: [],
+    stop: [],
+    tick: [],
     "trim-change": [],
   };
 
@@ -73,13 +69,9 @@ export class RecorderEngine {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LIFE CYCLE
+  // WAVEFORM
   // ─────────────────────────────────────────────────────────────
 
-  /**
-   * Attach a DOM container where the waveform must be rendered.
-   * Call this once you have a <div ref={...}> in React.
-   */
   attachWaveform(container: HTMLElement) {
     this.cleanupWaveform();
     this.waveformContainer = container;
@@ -102,7 +94,6 @@ export class RecorderEngine {
       this.trimStart = 0;
       this.trimEnd = this.duration;
 
-      // région entière par défaut
       const region = this.regions.addRegion({
         start: 0,
         end: this.duration,
@@ -123,11 +114,15 @@ export class RecorderEngine {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // LIFE CYCLE
+  // ─────────────────────────────────────────────────────────────
+
   destroy() {
     this.stopPlayback();
     this.cleanupRecorder();
     this.cleanupWaveform();
-    this.cleanupAudioGraph();
+    this.stopMetronome();
 
     if (this.audioURL) {
       URL.revokeObjectURL(this.audioURL);
@@ -135,53 +130,65 @@ export class RecorderEngine {
     }
 
     this.listeners = {
-      "ready": [],
+      ready: [],
       "record-start": [],
       "record-stop": [],
-      "play": [],
-      "stop": [],
-      "tick": [],
+      play: [],
+      stop: [],
+      tick: [],
       "trim-change": [],
     };
+
+    if (this.metroCtx) {
+      this.metroCtx.close();
+      this.metroCtx = null;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
   // RECORDING
   // ─────────────────────────────────────────────────────────────
 
-async startRecording(deviceId?: string) {
-  const constraints: MediaStreamConstraints = {
-    audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-  };
+  async startRecording(bpm?: number, deviceId?: string) {
+    const constraints: MediaStreamConstraints = {
+      audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+    };
 
-  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-  // on nettoie l’ancien recorder + graph, mais PAS la waveform
-  this.cleanupRecorder();
-  this.cleanupAudioGraph();
-  // ❌ PAS de cleanupWaveform ici
+    this.cleanupRecorder();
+    this.stopPlayback(); // on arrête une éventuelle lecture précédente
 
-  this.recordChunks = [];
-  const recorder = new MediaRecorder(stream, {
-    mimeType: "audio/webm",
-    audioBitsPerSecond: 128000,
-  });
-  this.mediaRecorder = recorder;
-  this.recordingStartTime = Date.now();
+    this.recordChunks = [];
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm",
+      audioBitsPerSecond: 128000,
+    });
+    this.mediaRecorder = recorder;
+    this.recordingStartTime = performance.now();
 
-  recorder.ondataavailable = (e) => {
-    if (e.data.size > 0) this.recordChunks.push(e.data);
-  };
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) this.recordChunks.push(e.data);
+    };
 
-  recorder.onstop = () => {
-    const blob = new Blob(this.recordChunks, { type: "audio/webm" });
-    this.setBlob(blob);
-    this.emit("record-stop");
-  };
+    recorder.onstop = () => {
+      const blob = new Blob(this.recordChunks, { type: "audio/webm" });
+      this.setBlob(blob);
+      this.emit("record-stop");
+      stream.getTracks().forEach((t) => t.stop());
+      this.stopMetronome();
+    };
 
-  recorder.start();
-  this.emit("record-start");
-}
+    // métronome
+    if (bpm && bpm > 0) {
+      this.startMetronome(bpm);
+    } else {
+      this.startMetronome(120);
+    }
+
+    recorder.start();
+    this.emit("record-start");
+  }
 
   stopRecording() {
     if (!this.mediaRecorder) return;
@@ -190,6 +197,7 @@ async startRecording(deviceId?: string) {
       this.mediaRecorder.stream.getTracks().forEach((t) => t.stop());
     }
     this.mediaRecorder = null;
+    this.stopMetronome();
   }
 
   private cleanupRecorder() {
@@ -199,6 +207,44 @@ async startRecording(deviceId?: string) {
     }
     this.mediaRecorder = null;
     this.recordChunks = [];
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // METRONOME
+  // ─────────────────────────────────────────────────────────────
+
+  private startMetronome(bpm: number) {
+    this.stopMetronome();
+
+    this.metroBpm = bpm;
+    if (!this.metroCtx) {
+      this.metroCtx = new AudioContext();
+    }
+
+    const intervalMs = (60 / this.metroBpm) * 1000;
+
+    this.metroIntervalId = window.setInterval(() => {
+      if (!this.metroCtx) return;
+
+      const t0 = this.metroCtx.currentTime;
+      const osc = this.metroCtx.createOscillator();
+      const gain = this.metroCtx.createGain();
+
+      osc.frequency.value = 1000;
+      gain.gain.setValueAtTime(0.9, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+
+      osc.connect(gain).connect(this.metroCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.1);
+    }, intervalMs);
+  }
+
+  private stopMetronome() {
+    if (this.metroIntervalId !== null) {
+      clearInterval(this.metroIntervalId);
+      this.metroIntervalId = null;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -213,8 +259,24 @@ async startRecording(deviceId?: string) {
     this.blob = blob;
     this.audioURL = URL.createObjectURL(blob);
 
+    // reset trim dans un premier temps, waveform recalculera duration
+    this.duration = 0;
+    this.trimStart = 0;
+    this.trimEnd = 0;
+
     if (this.waveform) {
       this.waveform.load(this.audioURL);
+    }
+    this.ensureAudioElement();
+  }
+
+  private ensureAudioElement() {
+    if (!this.audioURL) return;
+    if (!this.audioEl) {
+      this.audioEl = new Audio(this.audioURL);
+      this.audioEl.loop = false;
+    } else {
+      this.audioEl.src = this.audioURL;
     }
   }
 
@@ -241,17 +303,15 @@ async startRecording(deviceId?: string) {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // PLAYBACK + FX
+  // PLAYBACK
   // ─────────────────────────────────────────────────────────────
 
   play() {
     if (!this.audioURL) return;
-
-    this.stopPlayback();
-    this.ensureAudioGraph();
-
+    this.ensureAudioElement();
     if (!this.audioEl) return;
 
+    this.stopPlayback(); // reset tick loop
     this.audioEl.currentTime = this.trimStart;
     this.audioEl.play().catch(() => {});
     this.emit("play");
@@ -263,86 +323,6 @@ async startRecording(deviceId?: string) {
     this.emit("stop");
   }
 
-  updateFX(opts: { distortion?: boolean; lowpass?: boolean; gain?: number }) {
-    if (opts.distortion !== undefined) this.fxDistortion = opts.distortion;
-    if (opts.lowpass !== undefined) this.fxLowpass = opts.lowpass;
-    if (opts.gain !== undefined) this.fxGain = opts.gain;
-    this.applyFXToGraph();
-  }
-
-  private ensureAudioGraph() {
-    if (!this.audioURL) return;
-
-    if (!this.audioEl) {
-      this.audioEl = new Audio(this.audioURL);
-      this.audioEl.loop = false;
-    }
-
-    if (!this.audioContext) {
-      this.audioContext = new AudioContext();
-    }
-
-    if (!this.sourceNode) {
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audioEl);
-    }
-    if (!this.distortionNode) {
-      this.distortionNode = this.audioContext.createWaveShaper();
-    }
-    if (!this.lowpassNode) {
-      this.lowpassNode = this.audioContext.createBiquadFilter();
-      this.lowpassNode.type = "lowpass";
-    }
-    if (!this.gainNode) {
-      this.gainNode = this.audioContext.createGain();
-    }
-
-    this.sourceNode.disconnect();
-    this.distortionNode.disconnect();
-    this.lowpassNode.disconnect();
-    this.gainNode.disconnect();
-
-    this.sourceNode
-      .connect(this.distortionNode)
-      .connect(this.lowpassNode)
-      .connect(this.gainNode)
-      .connect(this.audioContext.destination);
-
-    this.applyFXToGraph();
-  }
-
-  private applyFXToGraph() {
-    if (!this.distortionNode || !this.lowpassNode || !this.gainNode) return;
-
-    // distortion
-    if (this.fxDistortion) {
-      this.distortionNode.curve = this.makeDistortionCurve(400);
-      this.distortionNode.oversample = "4x";
-    } else {
-      this.distortionNode.curve = null;
-    }
-
-    // lowpass
-    this.lowpassNode.frequency.value = this.fxLowpass ? 2000 : 20000;
-
-    // gain
-    this.gainNode.gain.value = this.fxGain;
-  }
-
-  private makeDistortionCurve(amount: number) {
-    const k = typeof amount === "number" ? amount : 0;
-    const n = 44100;
-    const curve = new Float32Array(n);
-    const deg = Math.PI / 180;
-    let x: number;
-    for (let i = 0; i < n; ++i) {
-      x = (i * 2) / n - 1;
-      curve[i] =
-        ((3 + k) * x * 20 * deg) /
-        (Math.PI + k * Math.abs(x));
-    }
-    return curve;
-  }
-
   private stopPlayback() {
     if (this.audioEl) {
       this.audioEl.pause();
@@ -352,29 +332,10 @@ async startRecording(deviceId?: string) {
   }
 
   private cleanupAudioGraph() {
+    // plus d’AudioContext ici, juste l’élément audio
     if (this.audioEl) {
       this.audioEl.pause();
       this.audioEl = null;
-    }
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
-    }
-    if (this.distortionNode) {
-      this.distortionNode.disconnect();
-      this.distortionNode = null;
-    }
-    if (this.lowpassNode) {
-      this.lowpassNode.disconnect();
-      this.lowpassNode = null;
-    }
-    if (this.gainNode) {
-      this.gainNode.disconnect();
-      this.gainNode = null;
-    }
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
     }
     this.stopTickLoop();
   }

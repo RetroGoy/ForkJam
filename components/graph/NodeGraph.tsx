@@ -30,10 +30,6 @@ const EDGE_STYLE: React.CSSProperties = {
   strokeWidth: 3,
 };
 
-// ───────────────────────────────────────────
-// Custom RF nodes
-// ───────────────────────────────────────────
-
 function NodeUI({ data }: any) {
   return (
     <div className="relative nodrag nopan">

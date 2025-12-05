@@ -20,6 +20,10 @@ export class AudioEngine {
   private subscribers = new Set<(t: number, d: number) => void>();
   private ticking = false;
 
+  // Compensation globale de latence d’enregistrement en secondes.
+  // Tu peux ajuster cette valeur en fonction de ce que tu constates (ex: 0.05, 0.1…)
+  private static readonly LATENCY_COMPENSATION_SEC = 0.08;
+
   constructor() {
     this.ctx = new AudioContext();
   }
@@ -63,20 +67,30 @@ export class AudioEngine {
 
     if (this.getCurrentTime() >= this.duration) this.stop();
 
-    const offset = this.pauseTime || 0;
-    this.startTime = this.ctx.currentTime - offset;
+    const logicalOffset = this.pauseTime || 0;
+    this.startTime = this.ctx.currentTime - logicalOffset;
     this.playing = true;
     this.sources.clear();
 
-    this.tracks.forEach(track => {
+    this.tracks.forEach((track) => {
       const src = this.ctx.createBufferSource();
       src.buffer = track.buffer;
       src.connect(track.gainNode);
 
-      src.start(0, offset);
+      // compensation : on saute les premières X ms du buffer
+      const compensation = AudioEngine.LATENCY_COMPENSATION_SEC;
+      const playbackOffset = Math.min(
+        logicalOffset + compensation,
+        track.duration
+      );
+
+      const remaining = Math.max(0, track.duration - playbackOffset);
+
+      src.start(0, playbackOffset);
       this.sources.set(track.id, src);
 
-      src.stop(this.ctx.currentTime + (track.duration - offset));
+      // stop à la fin réelle de la piste
+      src.stop(this.ctx.currentTime + remaining);
     });
 
     this.startTick();
@@ -97,8 +111,10 @@ export class AudioEngine {
   }
 
   private stopSources() {
-    this.sources.forEach(src => {
-      try { src.stop(); } catch {}
+    this.sources.forEach((src) => {
+      try {
+        src.stop();
+      } catch {}
     });
     this.sources.clear();
   }
@@ -127,6 +143,7 @@ export class AudioEngine {
   getDuration() {
     return this.duration;
   }
+
   getTrack(id: string) {
     return this.tracks.get(id) ?? null;
   }
@@ -138,30 +155,29 @@ export class AudioEngine {
   }
 
   private startTick() {
-  if (this.ticking) return;
-  this.ticking = true;
+    if (this.ticking) return;
+    this.ticking = true;
 
-  const loop = () => {
-    if (!this.playing) {
-      this.ticking = false;
-      return;
-    }
+    const loop = () => {
+      if (!this.playing) {
+        this.ticking = false;
+        return;
+      }
 
-    const t = this.getCurrentTime();
-    const d = this.duration;
+      const t = this.getCurrentTime();
+      const d = this.duration;
 
-if (t >= d) {
-  this.stop();
-  this.subscribers.forEach(fn => fn(d, d));
+      if (t >= d) {
+        this.stop();
+        this.subscribers.forEach((fn) => fn(d, d));
+        this.ticking = false;
+        return;
+      }
 
-  this.ticking = false;
-  return;
-}
+      this.subscribers.forEach((fn) => fn(t, d));
+      requestAnimationFrame(loop);
+    };
 
-    this.subscribers.forEach(fn => fn(t, d));
     requestAnimationFrame(loop);
-  };
-
-  requestAnimationFrame(loop);
-}
+  }
 }

@@ -91,6 +91,13 @@ export default function RootList({
   const [roots, setRoots] = useState<Node[]>(initialRoots);
 
   const [currentLocation, setCurrentLocation] = useState<number | null>(null);
+  useEffect(() => {
+    const load = async () => {
+      const data = await getRootNodes();
+      if (data) setRoots(data);
+    };
+    load();
+  }, []);
 
   useEffect(() => {
     const fetchLocation = async () => {
@@ -269,7 +276,7 @@ export default function RootList({
   //────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-30 flex flex-col">
+    <div className="h-30 flex flex-col backdrop-blur-xs">
 
       {/* SEARCH */}
       <div className="relative mb-3">

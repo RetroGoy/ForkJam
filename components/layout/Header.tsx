@@ -28,7 +28,7 @@ export function Header({ hud }: { hud?: React.ReactNode }) {
   };
 
   return (
-    <header className="bg-black/25 backdrop-blur-sm m-2 mb-0 px-4">
+    <header className="bg-gray-900/70 backdrop-blur-sm m-2 mb-0 px-4">
       <div className="flex justify-between items-center h-14">
 
         {/* LEFT : LOGO */}

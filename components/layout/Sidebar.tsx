@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { Node } from "@/lib/supabase/supabase";
-import TopicList from "@/components/topic/RootList";
+import TopicList from "@/components/shared/RootList";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 
@@ -20,7 +20,7 @@ export function Sidebar({ topics }: SidebarProps) {
         w-[20%] min-w-[250px]
         max-md:w-[30%]
         max-md:min-w-[180px]
-        max-md:max-w-[260px]
+        max-md:max-w-[260px] backdrop-blur-xs
       "
     >
       {/* MAIN PANEL */}

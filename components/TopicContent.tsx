@@ -100,13 +100,6 @@ export function TopicContent({
 
   return (
     <div className="flex h-screen">
-      {/* SIDEBAR */}
-      <div
-        className="h-full shrink-0 bg-black/40 border-r border-yellow-900/20"
-        style={{ width: SIDEBAR_WIDTH }}
-      >
-        {/* ton vrai sidebar ici */}
-      </div>
 
       {/* MAIN */}
       <div className="flex-1 overflow-hidden relative">

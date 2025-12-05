@@ -108,7 +108,7 @@ export function BranchTimelinePlayer({
             return (
               <div
                 key={bn.id}
-                className="relative h-20 rounded-sm bg-black/30 border border-black/60 overflow-hidden"
+                className="relative h-20 rounded-sm bg-black/20 overflow-hidden"
               >
                 {/* Waveform avec largeur relative */}
                 <div

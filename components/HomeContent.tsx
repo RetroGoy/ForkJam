@@ -29,10 +29,6 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
   document.body.style.overflow = showSidebar ? "hidden" : "auto";
 }, [showSidebar]);
 
-if (typeof window !== "undefined") {
-  throw new Error("Test Sentry client");
-}
-
   return (
     <div className="flex h-screen bg-dot-pattern">
       <div className="flex-1 overflow-y-auto relative">

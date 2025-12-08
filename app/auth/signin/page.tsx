@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/supabase";
 import Link from "next/link";
 import { Loader2, Mail, Lock } from "lucide-react";
+import { ResponsiveSidebarLayout } from "@/components/layout/ResponsiveSidebarLayout";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function SignInPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-black/60 shadow-[0_0_40px_rgba(0,0,0,0.7)] overflow-hidden relative">
+
         {/* Bandeau titre style "fenêtre OS" */}
         <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-yellow-700 to-yellow-500">
           <span className="text-xs font-black tracking-[0.25em] text-black uppercase">

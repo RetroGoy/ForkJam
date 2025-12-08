@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   description:
     'ForkJam est une plateforme musicale collaborative où chaque idée devient un nœud dans un graphe musical interactif.',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/icons/favicon.ico',   
+    shortcut: '/icons/favicon.ico',  
   },
   metadataBase: new URL("https://forkjam.app"),
 };
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className + " min-h-screen bg-black text-neutral-100"}>
+      <body className={inter.className + " bg-black text-neutral-100 overflow-hidden no-scrollbar"}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

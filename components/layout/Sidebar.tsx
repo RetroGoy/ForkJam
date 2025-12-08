@@ -205,17 +205,10 @@ export function Sidebar({ topics }: SidebarProps) {
   //────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="
-        flex flex-col h-screen p-3 
-        bg-card text-card-foreground border-r border-border 
-        w-[20%] min-w-[250px]
-        max-md:w-full
-      "
-    >
+    <div>
 
       {/* SEARCH */}
-      <div className="relative mb-3">
+      <div className="relative m-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
         <input
           type="text"

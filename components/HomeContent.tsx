@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
 import type { Node } from "@/lib/supabase/supabase";
 import { useTopicStore } from "@/store/useTopicStore";
-import { Header } from "@/components/layout/Header";
 import { Plus, Menu, X } from "lucide-react";
+import { ResponsiveSidebarLayout } from "./layout/ResponsiveSidebarLayout";
 
 interface HomeContentProps {
   initialTopics: Node[];   // root nodes
@@ -33,30 +32,10 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
   return (
     <div className="flex h-screen bg-dot-pattern">
       <div className="flex-1 overflow-y-auto relative">
-        <Header onToggleSidebar={toggleSidebar} />
+    <ResponsiveSidebarLayout topics={initialTopics}>
+      <div className="p-6">
 
-        <div className="flex">
-          <div className="hidden md:block">
-            <Sidebar topics={topics} />
-          </div>
-          <div
-            className={`
-              fixed inset-0 z-40 md:hidden 
-              bg-gray-900/80 backdrop-blur-xl 
-              transform transition-transform duration-300
-              ${showSidebar ? "translate-x-0" : "-translate-x-full"}
-            `}>
-            <Sidebar topics={topics} />
-
-            {/* CLOSE BUTTON */}
-            <button
-              onClick={toggleSidebar}
-              className="absolute top-4 right-4 text-yellow-300 bg-black/40 p-2 rounded">
-              <X size={24} />
-            </button>
-          </div>
-
-          <div className="relative z-10 flex flex-col m-8 mx-12 max-w-5xl w-full">
+          <div className="relative z-10 flex flex-col m-8 mx-12 max-w-5xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-8">
               <div>
                 <h1 className="text-5xl font-extrabold text-yellow-500 tracking-tight mb-4">
@@ -135,6 +114,7 @@ export function HomeContent({ initialTopics }: HomeContentProps) {
             </div>
           </div>
         </div>
+    </ResponsiveSidebarLayout>
       </div>
     </div>
   );

@@ -2,12 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { User } from "lucide-react";
+import { User, Menu, ExternalLink, Sun, Moon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/supabase";
 import Image from "next/image";
+import { useTheme } from "next-themes";
 
-export function Header({ hud }: { hud?: React.ReactNode }) {
+export function Header({ hud, onToggleSidebar }: { hud?: React.ReactNode, onToggleSidebar?: () => void }) {  
   const router = useRouter();
   const [user, setUser] = React.useState<any>(null);
 
@@ -27,20 +28,46 @@ export function Header({ hud }: { hud?: React.ReactNode }) {
     router.push(user ? "/profile" : "/auth/signin");
   };
 
+  const { theme, setTheme } = useTheme();
+
   return (
-    <header className="bg-gray-900/70 backdrop-blur-sm m-2 mb-0 px-4">
+    <header className="bg-background/70 backdrop-blur-sm mb-0 border-b-1 border-grey-300 px-4">
       <div className="flex justify-between items-center h-14">
 
-        {/* LEFT : LOGO */}
-        <Link href="/" className="flex items-center gap-2 py-1">
-          <Image
-            src="/logoFj.png"
-            alt="Logo ForkJam"
-            width={50}
-            height={40}
-            className="opacity-90"
-          />
+<div className="flex items-center gap-3">
+  {/* MOBILE MENU BTN */}
+  <button
+    onClick={onToggleSidebar}
+    className="md:hidden text-yellow-300 hover:text-yellow-200"
+  >
+    <Menu size={28} />
+  </button>
+
+  {/* LOGO */}
+  <Link href="/" className="flex items-center gap-2 py-1">
+    <Image
+      src="/logoFj.png"
+      alt="Logo ForkJam"
+      width={50}
+      height={40}
+      className="opacity-90"
+    />
+  </Link>
+
+        <Link
+          href="https://dumatus.fr"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 py-1">
+            <ExternalLink size={32} className="fill-black text-yellow-300 " />
         </Link>
+
+    <button
+      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      className="p-2 rounded bg-muted hover:bg-muted-foreground/10 transition">
+      {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+</div>
 
         {/* MIDDLE : HUD */}
         <div className="flex-1 flex justify-center">

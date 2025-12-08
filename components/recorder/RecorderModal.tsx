@@ -436,12 +436,12 @@ const handleStartRecording = async () => {
             placeholder="Track title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            className="flex-1 px-3 py-2 bg-background border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
           />
           <select
             value={instrument}
             onChange={(e) => setInstrument(e.target.value)}
-            className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            className="flex-1 px-3 py-2 bg-background border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
           >
             {INSTRUMENT_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
@@ -458,7 +458,7 @@ const handleStartRecording = async () => {
             <select
               value={selectedDeviceId}
               onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="flex-1 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs"
+              className="flex-1 px-2 py-1 bg-background border border-gray-700 rounded text-xs"
             >
               {devices.length === 0 && (
                 <option value="">(no input device)</option>

@@ -89,7 +89,7 @@ export default function SignUpPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, username: e.target.value }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 text-gray-100 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                 />
               </div>
             </div>
@@ -109,7 +109,7 @@ export default function SignUpPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, email: e.target.value }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-gray-100 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                 />
               </div>
             </div>
@@ -129,7 +129,7 @@ export default function SignUpPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, password: e.target.value }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-gray-100 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                 />
               </div>
             </div>
@@ -156,7 +156,7 @@ export default function SignUpPage() {
                         .slice(0, 2),                // ← limite à 2 chiffres
                     }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-gray-100 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                 />
               </div>
               <p className="text-[11px] text-gray-500">

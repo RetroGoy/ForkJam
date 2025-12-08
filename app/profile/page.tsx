@@ -63,14 +63,14 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="h-12 w-12 rounded-full border-t-2 border-b-2 border-yellow-400 animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-4xl mx-auto">
 
         {/* INFO HEADER */}
@@ -121,7 +121,7 @@ export default function ProfilePage() {
               onClick={() => router.push(`/topic/${n.topic_id}`)}
               className="cursor-pointer bg-gray-800 border border-yellow-900/30 hover:bg-gray-700 transition p-4 rounded-lg"
             >
-              <h3 className="font-semibold text-gray-100">{n.title}</h3>
+              <h3 className="font-semibold text-foreground">{n.title}</h3>
               <div className="text-gray-400 text-sm flex gap-4">
                 <span>{n.instrument}</span>
                 <span>{n.bpm} BPM</span>

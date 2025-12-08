@@ -51,7 +51,7 @@ export default function SignInPage() {
                   type="email"
                   required
                   placeholder="you@example.com"
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-gray-100 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, email: e.target.value }))
                   }
@@ -70,7 +70,7 @@ export default function SignInPage() {
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-gray-100 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, password: e.target.value }))
                   }

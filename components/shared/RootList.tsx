@@ -9,7 +9,7 @@ import {
   MousePointerClick,
   ChevronLeft,
   ChevronRight,
-  ThumbsUp,
+  ChevronUp,
   ThumbsDown,
   User,
   MapPin,
@@ -42,7 +42,7 @@ function Modal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="bg-gray-900 w-full max-w-md p-6 relative shadow-lg rounded-md">
+      <div className="bg-background w-full max-w-md p-6 relative shadow-lg rounded-md">
         <button
           className="absolute top-3 right-3 text-gray-400 hover:text-white"
           onClick={onClose}
@@ -340,7 +340,7 @@ export default function RootList({
       </div>
 
       {/* RESULTS */}
-      <div className="overflow-y-auto pr-1 scrollbar max-h-[50vh]">
+      <div className="overflow-y-auto pr-1 scrollbar h-[70vh]">
         {sorted.length ? (
           <div className="space-y-1 p-1">
             {sorted.map((r) => {
@@ -351,7 +351,7 @@ export default function RootList({
               return (
                 <Link
                   key={r.id}
-                  href={`/topic/${r.id}`}
+                  href={`/${r.id}`}
                   className={`
                     block rounded-md overflow-hidden relative
                     ${getColorClass(r.tag ?? "")}
@@ -381,7 +381,7 @@ export default function RootList({
                             : "bg-black/30 hover:bg-black/40"
                         }`}
                       >
-                        <ThumbsUp size={14} />
+                        <ChevronUp size={14} />
                       </button>
 
                       <span className="text-sm font-bold py-1">

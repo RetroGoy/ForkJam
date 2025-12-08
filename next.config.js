@@ -1,3 +1,5 @@
+const { withSentryConfig } = require("@sentry/nextjs");
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   images: {
@@ -7,4 +9,13 @@ const nextConfig = {
   serverExternalPackages: ["bufferutil", "utf-8-validate"],
 };
 
-export default nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  org: "forkjam",
+  project: "javascript-nextjs",
+
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  disableLogger: true,
+
+  automaticVercelMonitors: false,
+});

@@ -1,20 +1,16 @@
 import { notFound } from "next/navigation";
 import { getNode, getChildren } from "@/lib/supabase/supabase";
 import { TopicContent } from "@/components/TopicContent";
-import { ReactFlowProvider } from "reactflow";
-import { GraphWrapper } from "@/components/graph/GraphWrapper";
+import { supabase } from "@/lib/supabase/supabase";
 
 export default async function TopicPage(props: { params: Promise<{ id: string }> }) {
-
-  const { id } = await props.params;
+  const { params } = props;
+  const { id } = await params;
 
   const topic = await getNode(id);
+  if (!topic || !topic.is_root) notFound();
 
-  if (!topic || !topic.is_root) {
-    notFound();
-  }
-
-  const nodes: any[] = [topic];
+  const nodes = [topic];
 
   async function loadBranch(parentId: string) {
     const children = await getChildren(parentId);
@@ -26,12 +22,11 @@ export default async function TopicPage(props: { params: Promise<{ id: string }>
 
   await loadBranch(topic.id);
 
+  const { data: { session } } = await supabase.auth.getSession();
+
   return (
-    <GraphWrapper>
-    <TopicContent
-      rootNode={topic}
-      initialNodes={nodes}
-    />
-    </GraphWrapper>
+    <>
+      <TopicContent rootNode={topic} initialNodes={nodes} />
+    </>
   );
 }

@@ -1,65 +1,103 @@
+/* -------------------------------------------------------------------------
+   FORKJAM DESIGN SYSTEM — v1
+   Palette pensée pour une app créative basée sur des graphes musicaux.
+   Style : sombre, industriel, minimaliste, OS-like, accent vibrant.
+   -------------------------------------------------------------------------
+
+   PRINCIPES :
+   - Fond sombre charbon texturé (hsl(220 12% 8%))
+   - Surfaces légèrement contrastées (pour un rendu OS sobre)
+   - Texte gris chaud pour lisibilité
+   - Jaune signature = #facc15 (Tailwind yellow-400)
+   - Secondary = olive terne pour rappeler l'univers “tech organique”
+   - Accent = bleu électrique (liens, sliders, highlights audio)
+   - Muted = gris neutre saturé minimal (séparateurs, backgrounds secondary)
+   - Destructive = rouge calibré, non flashy
+
+   → Harmonisé autour de valeurs perceptuelles cohérentes (LCH-like)
+   → Cohésion visuelle pour UI complexe (graphe, timeline, cartes, tags)
+--------------------------------------------------------------------------- */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
 @layer base {
   :root {
+    /* ----- LIGHT MODE ----- */
+
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 220 15% 15%;
+
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 220 15% 15%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 72% 51%;
-    --primary-foreground: 0 85.7% 97.3%;
-    --secondary: 120 56.5% 21.8%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 209 100% 50%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 220 15% 15%;
+
+    /* JAUNE SIGNATURE — version claire (usable sur light mode) */
+    --primary: 48 96% 53%;            /* jaune riche */
+    --primary-foreground: 220 15% 15%;
+
+    /* SECONDARY = olive terne, technique, inspirée des dashboards industriels */
+    --secondary: 84 20% 75%;
+    --secondary-foreground: 220 15% 15%;
+
+    /* MUTED = gris désaturé (UI epurée) */
+    --muted: 220 10% 90%;
+    --muted-foreground: 220 10% 40%;
+
+    /* ACCENT = bleu électrique (interaction forte) */
+    --accent: 215 100% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    /* DESTRUCTIVE = rouge contrôlé */
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+
+    /* BORDURES ET INPUT */
+    --border: 220 10% 88%;
+    --input: 220 10% 88%;
+    --ring: 220 15% 20%;
+
     --radius: 0rem;
   }
 
   .dark {
-    --background: 225 9% 9%;
-    --foreground: 60 9.1% 97.8%;
-    --card: 24 9.8% 10%;
-    --card-foreground: 60 9.1% 97.8%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 60 9.1% 97.8%;
-    --primary: 60 54% 50%;
-    --primary-foreground: 60 9.1% 97.8%;
-    --secondary: 120 56.5% 21.8%;
-    --secondary-foreground: 60 9.1% 97.8%;
-    --muted: 12 6.5% 15.1%;
-    --muted-foreground: 24 5.4% 63.9%;
-    --accent: 209 100% 50%;
-    --accent-foreground: 60 9.1% 97.8%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --border: 12 6.5% 15.1%;
-    --input: 12 6.5% 15.1%;
-    --ring: 24 5.7% 82.9%;
+    /* ----- DARK MODE (MAJEUR POUR TON APP) ----- */
+
+    --background: 220 12% 8%;                 /* charbon profond */
+    --foreground: 60 9% 96%;                  /* texte gris chaud */
+
+    --card: 220 10% 10%;                      /* surfaces secondaires */
+    --card-foreground: 60 9% 96%;
+
+    --popover: 220 10% 8%;
+    --popover-foreground: 60 9% 96%;
+
+    /* JAUNE SIGNATURE = exactement Tailwind yellow-400 */
+    --primary: 48 96% 53%;                    /* = #facc15 */
+    --primary-foreground: 220 12% 8%;
+
+    /* SECONDARY = olive industrielle, plus sombre qu'en light */
+    --secondary: 84 25% 20%;
+    --secondary-foreground: 60 9% 96%;
+
+    /* MUTED = gris froid très doux (fond de composants) */
+    --muted: 220 8% 15%;
+    --muted-foreground: 220 6% 60%;
+
+    /* ACCENT = bleu électrique pour contrastes */
+    --accent: 215 100% 60%;
+    --accent-foreground: 0 0% 98%;
+
+    /* DESTRUCTIVE */
+    --destructive: 0 65% 40%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 8% 16%;
+    --input: 220 8% 16%;
+    --ring: 215 90% 65%;
   }
 }
 
@@ -96,7 +134,7 @@
   background-color: hsl(var(--background));
   background-image: radial-gradient(
     circle,
-    rgba(255,255,255,0.15) 1px,
+    rgba(19, 19, 24, 0.1) 1px,
     transparent 1px
   );
   background-size: 12px 12px;

@@ -98,33 +98,28 @@ export function TopicContent({
     audio.play();
   };
 
-  return (
-    <div className="flex h-screen">
-
-      {/* MAIN */}
-      <div className="flex-1 overflow-hidden relative">
-        {/* GRAPH */}
+return (
+<div className="w-full h-screen">
         <div className="absolute inset-0 z-10">
-          <NodeGraph
-            nodes={nodes}
-            topic={rootNode}
-            user={null}
-            refreshNodes={refreshNodes}
-            onNodeSelect={handleNodeSelect}
-            onAddChild={handleAddChild}
-            selectedNodeId={selectedNode?.id ?? null}
-          />
-        </div>
+  <NodeGraph
+    nodes={nodes}
+    topic={rootNode}
+    user={null}
+    refreshNodes={refreshNodes}
+    onNodeSelect={handleNodeSelect}
+    onAddChild={handleAddChild}
+    selectedNodeId={selectedNode?.id ?? null}
+  />
+  </div>
 
-        {/* BACKGROUND BRANCH TIMELINE */}
-        {selectedNode && (
-          <div className="absolute inset-0 z-0 pointer-events-none">
-            <BranchTimelinePlayer
-              selectedNode={selectedNode}
-              allNodes={nodes}
-            />
-          </div>
-        )}
+  {selectedNode && (
+    <div className="absolute inset-0 z-0 pointer-events-none">
+    <BranchTimelinePlayer
+      selectedNode={selectedNode}
+      allNodes={nodes}
+    />
+    </div>
+  )}
 
         {/* LOADING */}
         {loading && (
@@ -132,7 +127,6 @@ export function TopicContent({
             <div className="animate-spin h-6 w-6 border-t-2 border-yellow-400 rounded-full" />
           </div>
         )}
-
         {/* RECORDER */}
         <RecorderModal
           open={recorderOpen}
@@ -144,6 +138,5 @@ export function TopicContent({
           branch={recorderBranch}
         />
       </div>
-    </div>
   );
 }

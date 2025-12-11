@@ -1,21 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/supabase";
+import { useGlobalModal } from "@/components/modals/GlobalModal";
 
 export default function CallbackPage() {
-  const router = useRouter();
+  const { open } = useGlobalModal();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.push("/profile");
-      } else {
-        router.push("/auth");
-      }
-    });
-  }, []);
+    open("reset");
+  }, [open]);
 
-  return <div className="text-center p-8 text-yellow-400">Connecting...</div>;
+  return null;
 }

@@ -1,6 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  sendDefaultPii: false,
-});
+export const onRequestError = process.env.SENTRY_DISABLED
+  ? undefined
+  : Sentry.captureRequestError;

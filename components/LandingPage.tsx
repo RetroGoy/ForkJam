@@ -55,8 +55,8 @@ export function LandingPage() {
           La musique pousse.
         </h1>
         <p className="mt-6 max-w-2xl text-lg sm:text-xl text-muted-foreground leading-relaxed">
-          ForkJam est un espace collaboratif où les idées musicales deviennent 
-          des branches vivantes. Explorez, enregistrez, étendez. Ensemble.
+          Vos idées musicales deviennent des branches vivantes. 
+          Explorez, enregistrez, étendez. Ensemble.
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row gap-4">
@@ -78,10 +78,10 @@ export function LandingPage() {
         {/* MINI GRAPH (remplace ou garde ton SVG/visuel) */}
         <div className="mt-20 relative">
           <Image
-            src="/hero-mini-graph.png"
-            alt="Mini graphe musical"
+            src="/parallax-graph.png"
+            alt="parallax graph"
             width={700}
-            height={400}
+            height={200}
             className="opacity-90 mx-auto drop-shadow-xl"
           />
         </div>
@@ -124,7 +124,7 @@ export function LandingPage() {
             muted
             playsInline
             className="w-full max-h-[420px] object-cover"
-            src="/demo/forkjam-demo.mp4"
+            src="/demo/DemoForkJam.mov"
           />
           <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 via-transparent to-transparent" />
         </div>

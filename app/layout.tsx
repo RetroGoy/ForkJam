@@ -5,7 +5,7 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "next-themes";
 import { RootSearchProvider } from "@/components/search/RootSearchContext";
 import { UnifiedLayout } from "@/components/layout/UnifiedLayout";
-
+import { AudioProvider } from "@/components/audio/AudioProvider";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -50,13 +50,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} bg-black overflow-y-auto text-neutral-100`}>
+      <body className={`${inter.className} bg-black min-h-dvh overflow-y-auto text-neutral-100`}>
+        <AudioProvider>
         <RootSearchProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
             <UnifiedLayout session={session}>{children}</UnifiedLayout>
             <Toaster position="top-center" />
           </ThemeProvider>
         </RootSearchProvider>
+        </AudioProvider>
       </body>
     </html>
   );

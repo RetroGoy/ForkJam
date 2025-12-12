@@ -5,10 +5,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { PlayCircle, Users, Trees, AudioWaveform } from "lucide-react";
 import { getRootNodes, type Node, supabase } from "@/lib/supabase/supabase";
+import { NodeCard } from "@/components/nodes/NodeCard";
+import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 
 export function LandingPage() {
   const [topics, setTopics] = useState<Node[]>([]);
   const [user, setUser] = useState<any>(null);
+
+    const audio = useAudioEngine();
+  function handleToggle(node: Node) {
+    const branch = [{ id: node.id, audio_url: node.audio_url }];
+    audio.loadBranch(branch).then(() => {
+      audio.isPlaying ? audio.pause() : audio.play();
+    });
+  }
 
   // Vérifier si user connecté → rediriger vers /feed
   useEffect(() => {
@@ -158,38 +168,24 @@ export function LandingPage() {
         </h2>
 
         {topics.length > 0 ? (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {topics.map((t) => (
-                <Link
-                  key={t.id}
-                  href={`/${t.id}`}
-                  className="p-5 rounded-lg border border-border bg-muted/10 hover:bg-muted/20 hover:scale-[1.02] transition shadow"
-                >
-                  <h3 className="font-bold text-lg mb-2">{t.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {t.description || "A musical topic to explore."}
-                  </p>
-                  <span className="text-xs uppercase opacity-70 mt-3 block">
-                    {t.tag ?? "No tag"}
-                  </span>
-                </Link>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {topics.map((t) => {
+              const playingThis =
+                audio.isPlaying && audio.branch.some((b) => b.id === t.id);
 
-            <div className="text-center mt-12">
-              <Link
-                href="/explore"
-                className="px-6 py-3 rounded-md bg-yellow-400 text-black font-bold text-lg hover:bg-yellow-300 transition"
-              >
-                Voir tous les topics
-              </Link>
-            </div>
-          </>
-        ) : (
-          <div className="text-center text-muted-foreground text-sm">
-            Aucun topic pour le moment. Soyez le premier à en créer un.
+              return (
+                <NodeCard
+                  key={t.id}
+                  node={t}
+                  variant="root"
+                  isPlaying={playingThis}
+                  onPlayPause={() => handleToggle(t)}
+                />
+              );
+            })}
           </div>
+        ) : (
+          <p>Aucun topic pour le moment.</p>
         )}
       </section>
 

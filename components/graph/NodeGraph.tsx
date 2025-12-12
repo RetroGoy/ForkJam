@@ -12,9 +12,9 @@ import ReactFlow, {
   Edge as RFEdge,
   useReactFlow,
 } from "reactflow";
-
+import { computeNodeBase } from "@/components/nodes/NodeBase";
 import "reactflow/dist/style.css";
-import { NodeCard } from "./NodeCard";
+import { ChildNodeCard } from "@/components/nodes/ChildNodeCard";
 import type { Node } from "@/lib/supabase/supabase";
 import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 
@@ -23,27 +23,25 @@ import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 // ───────────────────────────────────────────
 const H_SPACING = 320; // horizontal gap between generations
 const V_SPACING = 220; // vertical gap between leaves
-const PLUS_OFFSET_Y = 60; // distance from last child center to "+"
+const PLUS_OFFSET_Y = 140; // distance from last child center to "+"
 
 const EDGE_STYLE: React.CSSProperties = {
   stroke: "#FFD84A",
-  strokeWidth: 3,
+  strokeWidth: 5,
 };
 
 function NodeUI({ data }: any) {
   return (
     <div className="relative nodrag nopan">
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
-      <NodeCard
+      <ChildNodeCard
         node={data.node}
         score={data.score}
+        colorClass={data.colorClass}
         isPlaying={data.isPlaying}
-        isSelected={data.isSelected}
         onPlayPause={data.onPlayPause}
         onUpvote={data.onUpvote}
         onDownvote={data.onDownvote}
-        isRoot={data.node.parent_node_id === null}
-        onAddChild={data.onAddChild}
       />
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>
@@ -56,7 +54,7 @@ function PlusUI({ data }: any) {
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <div
         onClick={data.onAdd}
-        className="flex items-center justify-center w-10 h-10 bg-yellow-600 text-black rounded-sm cursor-pointer hover:bg-yellow-500 transition"
+        className="flex items-center justify-center w-10 h-10 bg-yellow-600 text-black rounded-[6px] cursor-pointer hover:bg-yellow-500 transition"
       >
         +
       </div>
@@ -92,8 +90,8 @@ export function NodeGraph({
   onAddChild,
   selectedNodeId = null,
 }: NodeGraphProps) {
-  // on lit juste l’état de lecture global pour l’icône Play/Pause
-const { branch, isPlaying: transportPlaying } = useAudioEngine();
+
+  const { branch, isPlaying: transportPlaying } = useAudioEngine();
   const reactFlow = useReactFlow();
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<RFNode[]>([]);
@@ -118,6 +116,7 @@ const { branch, isPlaying: transportPlaying } = useAudioEngine();
     y: number;
     childrenY: number[];
   };
+  console.log("computeNodeBase =", computeNodeBase);
 
   const buildGraph = useCallback(() => {
     const graphNodes: RFNode[] = [];
@@ -167,6 +166,7 @@ const { branch, isPlaying: transportPlaying } = useAudioEngine();
 
       const posX = depth * H_SPACING;
       const posY = info.y;
+      const { score, colorClass } = computeNodeBase(node);
 
         const nodeInBranch = branch.some((b) => b.id === node.id);
         const nodeIsPlaying = transportPlaying && nodeInBranch;
@@ -176,9 +176,11 @@ const { branch, isPlaying: transportPlaying } = useAudioEngine();
           type: "node",
           position: { x: posX, y: posY },
           draggable: false,
+
           data: {
             node,
-            score: node.note ?? 0,
+            score,
+            colorClass, 
             isPlaying: nodeIsPlaying,
             isSelected: selectedNodeId === node.id,
             onPlayPause: () => onNodeSelect(node),
@@ -282,7 +284,7 @@ const { branch, isPlaying: transportPlaying } = useAudioEngine();
         nodesDraggable={false}
         panOnDrag
         zoomOnScroll
-        defaultEdgeOptions={{ type: "step", style: EDGE_STYLE }}
+        defaultEdgeOptions={{ type: "smoothstep", style: EDGE_STYLE }}
       >
         <div className="absolute right-2 bottom-2 z-10">
           <Controls />

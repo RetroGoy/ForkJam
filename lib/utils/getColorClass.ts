@@ -10,7 +10,7 @@ console.log("TAG RECUS =", t);
   if (t.includes("dance") || t.includes("edm")) return "bg-emerald-700";
   if (t.includes("house")) return "bg-teal-700";
   if (t.includes("techno")) return "bg-cyan-700";
-  if (t.includes("ambiant")) return "bg-sky-700";
+  if (t.includes("ambiant") || t.includes("ambient")) return "bg-sky-700";
   if (t.includes("experimental")) return "bg-blue-700";
   if (t.includes("classical") || t.includes("orchestral")) return "bg-indigo-700";
   if (t.includes("world") || t.includes("folk")) return "bg-violet-700";

@@ -43,7 +43,30 @@ export type Node = {
   note: number;
   created_at?: string;
 
-  user_id: string | null;  // ← FIX ICI
+  user_id: string | null; 
+  username: string | null;
+};
+
+export type Vote = {
+  id: string;
+
+  title: string;
+  description: string | null;
+
+  audio_url: string | null;
+  instrument: string | null;
+
+  parent_node_id: string | null;
+  is_root: boolean;
+
+  bpm: number | null;
+  tag: string | null;
+  location: number | null;
+
+  note: number;
+  created_at?: string;
+
+  user_id: string | null; 
   username: string | null;
 };
 

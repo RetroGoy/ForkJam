@@ -3,8 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/supabase";
 import { useRouter } from "next/navigation";
-import UserHeader from "@/components/profil/UserHeader";
-import UserNodes from "@/components/profil/UserNodes";
 import { useGlobalModal } from "@/components/modals/GlobalModal";
 
 export default function ProfilePage() {
@@ -56,13 +54,6 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-4xl mx-auto space-y-10">
-
-        <UserHeader
-          profile={profile}
-          onEdit={() => open("settings")}
-        />
-
-        <UserNodes nodes={nodes} />
 
       </div>
     </div>

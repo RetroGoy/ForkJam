@@ -24,14 +24,6 @@ export function AppHeader() {
         <ArrowRight size={20} />
       </button>
 
-      {/* Profile */}
-      <button
-        onClick={() => router.push("/profil")}
-        className="w-10 h-10 flex items-center justify-center rounded-xl bg-muted hover:bg-muted/80"
-      >
-        <User size={20} />
-      </button>
-
     </header>
   );
 }

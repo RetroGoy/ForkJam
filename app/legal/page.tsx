@@ -17,16 +17,14 @@ export default function LegalPage() {
         <div className="space-y-2 text-sm text-neutral-300 sm:text-base">
           <p>
             <span className="font-semibold">Éditeur :</span> ForkJam
-            {/* TODO: si tu veux, tu peux ajouter ton nom ici ou laisser plus flou tant que tu n’as pas de structure */}
           </p>
           <p>
             <span className="font-semibold">Responsable de publication :</span>{" "}
-            {/* TODO: ton nom complet ou pseudo */}
-            Nathanaël Naveau
+            Nathanaël Von Eggis
           </p>
           <p>
             <span className="font-semibold">Contact :</span>{" "}
-            <span className="font-mono">contact@forkjam.app</span>
+            <span className="font-mono">n.naveau@icloud.com</span>
           </p>
           <p>
             <span className="font-semibold">Hébergement :</span> Vercel Inc., 340

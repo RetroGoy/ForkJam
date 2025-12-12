@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react/no-unescaped-entities */
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
@@ -48,7 +49,7 @@ export function LandingPage() {
 
   return (
       <>
-      <section className="relative flex flex-col items-center px-6 py-24 sm:py-32 text-center overflow-y-auto">
+      <section className="relative flex flex-col items-center px-6 py-24 sm:py-32 text-center overflow-y-auto overflow-x-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,229,80,0.08),transparent_70%)] pointer-events-none" />
 
         <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight text-yellow-400 drop-shadow-lg">
@@ -131,30 +132,30 @@ export function LandingPage() {
       </section>
 
       {/* FEATURES */}
-      <section className="py-20 px-6 bg-background/60 backdrop-blur border-t border-border">
+      <section className="py-10 sm:py-20 px-6 bg-background/60 backdrop-blur border-t border-border">
         <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-10 text-center">
 
-          <div className="p-6 rounded-lg bg-muted/20 border border-border hover:bg-muted/30 transition">
+          <div className="p-6 rounded-[7px] bg-muted/20 border border-border hover:bg-muted/30 transition">
             <AudioWaveform size={42} className="mx-auto text-yellow-400 mb-4" />
-            <h3 className="text-xl font-bold mb-2">Créer instantanément</h3>
-            <p className="text-muted-foreground">
+            <h3 className="text-md sm:text-xl font-bold mb-2">Créer instantanément</h3>
+            <p className="text-muted-foreground text-sm sm:text-md">
               Enregistrez vos idées directement dans le graphe, sans ouvrir un DAW.
             </p>
           </div>
 
-          <div className="p-6 rounded-lg bg-muted/20 border border-border hover:bg-muted/30 transition">
+          <div className="p-6 rounded-[7px] bg-muted/20 border border-border hover:bg-muted/30 transition">
             <Trees size={42} className="mx-auto text-yellow-400 mb-4" />
-            <h3 className="text-xl font-bold mb-2">Faire pousser des branches</h3>
-            <p className="text-muted-foreground">
+            <h3 className="text-md sm:text-xl font-bold mb-2">Faire pousser des branches</h3>
+            <p className="text-muted-foreground text-sm sm:text-md">
               Chaque noeud est une piste. 
               La musique devient organique et visuelle.
             </p>
           </div>
 
-          <div className="p-6 rounded-lg bg-muted/20 border border-border hover:bg-muted/30 transition">
+          <div className="p-6 rounded-[7px] bg-muted/20 border border-border hover:bg-muted/30 transition">
             <Users size={42} className="mx-auto text-yellow-400 mb-4" />
-            <h3 className="text-xl font-bold mb-2">Collaborer facilement</h3>
-            <p className="text-muted-foreground">
+            <h3 className="text-md sm:text-xl font-bold mb-2">Collaborer facilement</h3>
+            <p className="text-muted-foreground text-sm sm:text-md">
               Rejoignez des topics et étendez les idées d’autres musiciens.
             </p>
           </div>
@@ -204,7 +205,7 @@ export function LandingPage() {
           href="/auth/signup"
           className="px-8 py-4 rounded-md bg-yellow-400 text-black font-bold text-lg hover:bg-yellow-300 transition"
         >
-          S inscrire
+          S'inscrire
         </Link>
       </section>
       </>

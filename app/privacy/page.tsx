@@ -32,8 +32,7 @@ export default function PrivacyPage() {
           écrivant à :
         </p>
         <p className="text-sm font-mono text-yellow-300 sm:text-base">
-          {/* TODO: éventuellement une adresse mail dédiée vie privée */}
-          privacy@forkjam.app
+          n.naveau@icloud.com
         </p>
       </section>
     </main>

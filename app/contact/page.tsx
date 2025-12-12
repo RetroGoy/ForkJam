@@ -22,8 +22,7 @@ export default function ContactPage() {
           Vous pouvez me contacter directement à l’adresse suivante :
         </p>
         <p className="text-sm font-mono text-yellow-300 sm:text-base">
-          {/* TODO: remplace par ton vrai mail dédié si tu en crées un */}
-          contact@forkjam.app
+          n.naveau@icloud.com
         </p>
       </section>
     </main>

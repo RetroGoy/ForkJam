@@ -39,7 +39,7 @@ export function UnifiedLayout({ children }: UnifiedLayoutProps) {
           {isLogged && <BottomBar />}
 
           {!isLogged && (
-            <footer className="absolute bottom-0 left-0 right-0 z-30">
+            <footer className="absolute fixed bottom-0 left-0 right-0 z-30">
               <Footer />
             </footer>
           )}

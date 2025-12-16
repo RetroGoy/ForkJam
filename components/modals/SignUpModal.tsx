@@ -16,7 +16,8 @@ export function SignUpModal() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +26,7 @@ export function SignUpModal() {
 
     try {
       if (!formData.department.trim()) {
-        throw new Error("Please enter your department.");
+        throw new Error("Please enter your department");
       }
 
       // SIGN UP
@@ -33,25 +34,35 @@ export function SignUpModal() {
         email: formData.email,
         password: formData.password,
       });
-
       if (signUpError) throw signUpError;
-      const user = data.user;
-      if (!user) throw new Error("Unable to create user.");
 
-      // INSERT PROFILE
+      // FORCE SESSION
+      await supabase.auth.getSession();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setError(""); 
+        setSuccess("Please check your email to confirm your account");
+        return;
+      }
+
+      // INSERT PROFILE (LE SEUL)
       const { error: insertError } = await supabase.from("users").insert({
         id: user.id,
         email: formData.email,
         username: formData.username,
         department: formData.department,
       });
-
       if (insertError) throw insertError;
 
       close();
-      open("signin"); // on ouvre la modal sign-in automatiquement
+      open("signin");
+
+      close();
+      open("signin");
     } catch (err: any) {
-      setError(err.message ?? "An unknown error occurred.");
+      setError(err.message ?? "An unknown error occurred");
     }
 
     setLoading(false);
@@ -59,7 +70,6 @@ export function SignUpModal() {
 
   return (
     <div className="w-full">
-      {/* TITLE BAR */}
       <div className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-yellow-700 to-yellow-500 rounded-t-lg">
         <span className="text-xs font-black tracking-[0.25em] text-black uppercase">
           CREATE ACCOUNT
@@ -140,8 +150,13 @@ export function SignUpModal() {
 
           {/* ERRORS */}
           {error && (
-            <p className="text-red-400 text-xs bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+            <p className="text-red-400 text-xs bg-red-900/20 border border-red-700/40 rounded-lg px-3 py-2">
               {error}
+            </p>
+          )}
+          {success && (
+            <p className="text-green-400 text-xs bg-green-900/20 border border-green-700/40 rounded-lg px-3 py-2">
+              {success}
             </p>
           )}
 

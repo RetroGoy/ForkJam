@@ -97,13 +97,13 @@ export function Sidebar() {
 
       {/* FOOTER */}
       <div className="flex flex-col items-center gap-4 py-4">
-
+{/* 
         <SidebarIcon
           icon={theme === "dark" ? Sun : Moon}
           label="Theme"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         />
-
+ */}
         <SidebarIcon
           icon={Settings}
           label="Settings"

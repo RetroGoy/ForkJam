@@ -170,7 +170,7 @@ export function TopicContent({
   };
 
 return (
-<div className="w-full h-screen">
+<div className="w-full h-full">
         <div className="absolute inset-0 z-10">
   <NodeGraph
     nodes={nodes}

@@ -10,6 +10,7 @@ import React, {
 import {
   supabase,
   getRootNodes,
+  getTopicScores,
   toggleNodeVote,
   type Node,
 } from "@/lib/supabase/supabase";
@@ -31,6 +32,7 @@ type RootSearchContextType = {
   ) => Promise<void>;
   childrenCounts: Record<string, number>;
   currentLocation: number | null;
+  topicScores: Record<string, number>;
 };
 
 const RootSearchContext = createContext<RootSearchContextType | null>(null);
@@ -44,8 +46,7 @@ export function RootSearchProvider({ children }: { children: React.ReactNode }) 
     {}
   );
   const [currentLocation, setCurrentLocation] = useState<number | null>(null);
-
-  const styleOptions = ["Rock", "Electro", "Jazz", "Experimental"] as const;
+  const [topicScores, setTopicScores] = useState<Record<string, number>>({});
 
   // FETCH ROOT NODES
   useEffect(() => {
@@ -53,6 +54,11 @@ export function RootSearchProvider({ children }: { children: React.ReactNode }) 
       const data = await getRootNodes();
       if (data) setRoots(data);
     })();
+  }, []);
+
+  // NOTES AGRÉGÉES PAR TOPIC
+  useEffect(() => {
+    (async () => setTopicScores(await getTopicScores()))();
   }, []);
 
   // USER LOCATION (department)
@@ -63,13 +69,21 @@ export function RootSearchProvider({ children }: { children: React.ReactNode }) 
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
-        .from("users")
-        .select("department")
-        .eq("id", user.id)
-        .single();
-
-      const loc = data?.department ? Number(data.department) : null;
+      // Source primaire : métadonnées auth (pas de RLS). Secours : table users.
+      let loc: number | null = null;
+      const metaDep = user.user_metadata?.department;
+      if (metaDep != null && String(metaDep) !== "") {
+        const n = Number(metaDep);
+        if (!Number.isNaN(n)) loc = n;
+      }
+      if (loc == null) {
+        const { data } = await supabase
+          .from("users")
+          .select("department")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (data?.department) loc = Number(data.department);
+      }
       setCurrentLocation(loc);
     })();
   }, []);
@@ -107,60 +121,54 @@ export function RootSearchProvider({ children }: { children: React.ReactNode }) 
     })();
   }, []);
 
-  const toggleFilter = (id: FilterId) => {
-    setSelectedFilters((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
+  // Genres = tout ce qui n'est pas un filtre spécial (tri / proximité).
+  const SPECIAL = ["recent", "popular", "nearby"];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  const styleFilters = useMemo(
-    () => selectedFilters.filter((x) => styleOptions.includes(x as any)),
+  const genreFilters = useMemo(
+    () => selectedFilters.filter((f) => !SPECIAL.includes(f)),
     [selectedFilters]
   );
 
   const filtered = useMemo(() => {
+    const nearby = selectedFilters.includes("nearby");
+    const term = searchTerm.toLowerCase().trim();
+
     return roots
-      .filter((r) =>
-        r.title.toLowerCase().includes(searchTerm.toLowerCase().trim())
-      )
+      .filter((r) => r.title.toLowerCase().includes(term))
       .filter((r) => {
-        if (styleFilters.length === 0) return true;
-        const tag = r.tag?.toLowerCase() ?? "";
-        return styleFilters.some((sf) => tag.includes(sf.toLowerCase()));
+        if (genreFilters.length === 0) return true;
+        const tag = norm(r.tag ?? "");
+        return genreFilters.some((g) => tag.includes(norm(g)));
+      })
+      .filter((r) => {
+        if (!nearby) return true;
+        if (currentLocation == null) return false;
+        return r.location != null && Number(r.location) === currentLocation;
       });
-  }, [roots, searchTerm, styleFilters]);
+  }, [roots, searchTerm, genreFilters, selectedFilters, currentLocation]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
     const popular = selectedFilters.includes("popular");
     const recent = selectedFilters.includes("recent");
-    const nearby = selectedFilters.includes("nearby");
 
     copy.sort((a, b) => {
-      if (nearby && currentLocation != null) {
-        const aNear = a.location === currentLocation;
-        const bNear = b.location === currentLocation;
-        if (aNear && !bNear) return -1;
-        if (!aNear && bNear) return 1;
-      }
-
       if (popular) {
         const ca = childrenCounts[a.id] ?? 0;
         const cb = childrenCounts[b.id] ?? 0;
         if (ca !== cb) return cb - ca;
       }
-
       if (recent) {
         const da = a.created_at ? new Date(a.created_at).getTime() : 0;
         const db = b.created_at ? new Date(b.created_at).getTime() : 0;
         if (da !== db) return db - da;
       }
-
       return 0;
     });
 
     return copy;
-  }, [filtered, selectedFilters, childrenCounts, currentLocation]);
+  }, [filtered, selectedFilters, childrenCounts]);
 
   const handleVoteClick = async (
     e: React.MouseEvent,
@@ -188,6 +196,7 @@ export function RootSearchProvider({ children }: { children: React.ReactNode }) 
     handleVoteClick,
     childrenCounts,
     currentLocation,
+    topicScores,
   };
 
   return (

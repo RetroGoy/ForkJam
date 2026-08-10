@@ -29,10 +29,16 @@ export function SignUpModal() {
         throw new Error("Please enter your department");
       }
 
-      // SIGN UP
+      // SIGN UP (username + département stockés dans les métadonnées auth)
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: {
+          data: {
+            username: formData.username,
+            department: formData.department.trim(),
+          },
+        },
       });
       if (signUpError) throw signUpError;
 

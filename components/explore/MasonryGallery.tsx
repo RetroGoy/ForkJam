@@ -4,9 +4,11 @@ import React from "react";
 import type { Node } from "@/lib/supabase/supabase";
 import { NodeCard } from "@/components/nodes/NodeCard";
 import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
+import { useRootSearch } from "@/components/search/RootSearchContext";
 
 export function MasonryGallery({ topics }: { topics: Node[] }) {
   const audio = useAudioEngine();
+  const { topicScores } = useRootSearch();
 
   function handleToggle(node: Node) {
     const branch = [{ id: node.id, audio_url: node.audio_url }];
@@ -26,6 +28,7 @@ export function MasonryGallery({ topics }: { topics: Node[] }) {
             <NodeCard
               node={node}
               variant="root"
+              score={topicScores[node.id] ?? 0}
               isPlaying={playingThis}
               onPlayPause={() => handleToggle(node)}
             />

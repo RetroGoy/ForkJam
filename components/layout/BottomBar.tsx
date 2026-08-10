@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Compass, PlusCircle, Bell, User } from "lucide-react";
+import { Home, Compass, PlusCircle, Bell, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useGlobalModal } from "@/components/modals/GlobalModal";
 
@@ -48,11 +48,8 @@ export function BottomBar() {
         <Bell size={20} />
       </button>
 
-      <button
-        onClick={() => router.push("/profil")}
-        className={item(isActive("/profil"))}
-      >
-        <User size={20} />
+      <button onClick={() => open("settings")} className={item(false)}>
+        <Settings size={20} />
       </button>
     </nav>
   );

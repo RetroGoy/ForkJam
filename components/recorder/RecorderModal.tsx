@@ -13,6 +13,8 @@ import {
   Crosshair,
   Timer,
   Headphones,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -76,6 +78,65 @@ const INSTRUMENT_OPTIONS = [
 ];
 
 const COUNT_IN_BARS = 1;
+const BEATS_PER_BAR = 4;
+const COUNT_IN_BEATS = COUNT_IN_BARS * BEATS_PER_BAR;
+
+const GENRE_OPTIONS = [
+  "rock",
+  "electro",
+  "jazz",
+  "experimental",
+  "indie",
+  "blues",
+  "metal",
+  "pop",
+  "dance",
+  "house",
+  "techno",
+  "ambiant",
+  "classical",
+  "world",
+  "folk",
+  "soundtrack",
+  "reggae",
+  "hip-hop",
+];
+
+function FxSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  format,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  format: (v: number) => string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-white/50">
+        <span>{label}</span>
+        <span className="font-mono text-yellow-200/80">{format(value)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="h-1.5 w-full cursor-pointer accent-yellow-400"
+      />
+    </div>
+  );
+}
 
 export const RecorderModal: React.FC<RecorderModalProps> = ({
   open,
@@ -89,10 +150,10 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   parentNodes = [],
   onCreated,
 }) => {
-  const [title, setTitle] = useState(isRoot ? "Root Track" : initialTitle);
-  const [instrument, setInstrument] = useState(
-    isRoot ? "guitar" : initialInstrument || "guitar"
-  );
+  const [title, setTitle] = useState("");
+  const [instrument, setInstrument] = useState("");
+  const [genre, setGenre] = useState("");
+  const [metronomeOn, setMetronomeOn] = useState(true);
 
   const [mode, setMode] = useState<RecorderMode>("idle");
   const [recElapsed, setRecElapsed] = useState(0); // <0 = count-in
@@ -106,8 +167,20 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   // traitement
   const [gain, setGainValue] = useState(1);
   const [doNormalize, setDoNormalize] = useState(true);
+  const [fadeIn, setFadeIn] = useState(0);
+  const [fadeOut, setFadeOut] = useState(0);
+  const [eqLow, setEqLow] = useState(0);
+  const [eqMid, setEqMid] = useState(0);
+  const [eqHigh, setEqHigh] = useState(0);
+  const [reverb, setReverb] = useState(0);
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // BPM : éditable pour un topic racine, hérité du parent sinon
+  const [rootBpm, setRootBpm] = useState<number>(
+    typeof bpm === "number" && bpm > 0 ? bpm : 120
+  );
+  const bpmVal = isRoot ? rootBpm : typeof bpm === "number" && bpm > 0 ? bpm : 120;
 
   // pistes parentes décodées -> vue multipiste DAW
   const [lanes, setLanes] = useState<RecorderLane[]>([]);
@@ -116,6 +189,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
 
   const engineRef = useRef<RecorderEngine | null>(null);
   const waveformRef = useRef<HTMLDivElement | null>(null);
+  const togglePreviewRef = useRef<() => void>(() => {});
 
   const audio = useAudioEngine();
   const isPreviewing = audio.isPlaying && mode === "editing";
@@ -141,7 +215,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
     engine.on("record-start", () => {
       setMode("recording");
       setHasBlob(false);
-      setRecElapsed(-COUNT_IN_BARS); // affiche le count-in
+      setRecElapsed(-(COUNT_IN_BEATS * (60 / bpmVal))); // durée du count-in
     });
 
     engine.on("tick", (elapsed: number) => setRecElapsed(elapsed));
@@ -223,23 +297,41 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Recalcule la lane statique de la prise (trim + normalize) pour l'ensemble.
+  // Barre espace = lecture / pause du mix (hors champs de saisie).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || t?.isContentEditable)
+        return;
+      e.preventDefault();
+      togglePreviewRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // Recalcule la lane statique de la prise (rapide, sans EQ/reverb) pour l'ensemble.
   useEffect(() => {
     if (mode !== "editing" || !hasBlob) {
       setTakeLaneBuffer(null);
       return;
     }
-    const take = engineRef.current?.buildProcessedTake({ normalize: doNormalize });
-    setTakeLaneBuffer(take?.buffer ?? null);
+    const buf = engineRef.current?.buildTakeBuffer({
+      normalize: doNormalize,
+      fadeIn,
+      fadeOut,
+    });
+    setTakeLaneBuffer(buf ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, hasBlob, trimStart, trimEnd, doNormalize]);
+  }, [mode, hasBlob, trimStart, trimEnd, doNormalize, fadeIn, fadeOut]);
 
   // ── RECORD (count-in + parents calés sur le temps 1) ──
   const handleStartRecording = async () => {
     const engine = engineRef.current;
     if (!engine) return;
-
-    const bpmToUse = typeof bpm === "number" && bpm > 0 ? bpm : 120;
 
     try {
       audio.stop();
@@ -250,9 +342,11 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
 
       // 2) arme l'enregistrement + count-in -> renvoie le temps 1
       const { downbeatTime } = await engine.arm({
-        bpm: bpmToUse,
+        bpm: bpmVal,
         deviceId: selectedDeviceId || undefined,
         countInBars: COUNT_IN_BARS,
+        beatsPerBar: BEATS_PER_BAR,
+        metronome: metronomeOn,
       });
 
       // 3) lance les parents EXACTEMENT sur le temps 1
@@ -275,7 +369,15 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
     const engine = engineRef.current;
     if (!engine || !engine.hasRecording()) return;
 
-    const take = engine.buildProcessedTake({ normalize: doNormalize });
+    const take = await engine.buildProcessedTake({
+      normalize: doNormalize,
+      fadeIn,
+      fadeOut,
+      eqLow,
+      eqMid,
+      eqHigh,
+      reverb,
+    });
     if (!take) {
       toast.error("Rien à lire");
       return;
@@ -322,8 +424,17 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
         return;
       }
 
-      // traitement final : trim + gain + normalize -> WAV
-      const take = engine.buildProcessedTake({ gain, normalize: doNormalize });
+      // traitement final : trim + gain + normalize + fades + EQ + reverb -> WAV
+      const take = await engine.buildProcessedTake({
+        gain,
+        normalize: doNormalize,
+        fadeIn,
+        fadeOut,
+        eqLow,
+        eqMid,
+        eqHigh,
+        reverb,
+      });
       if (!take || take.samples.length < 1024) {
         toast.error("Prise trop courte");
         setIsSaving(false);
@@ -347,8 +458,8 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
         instrument,
         parent_node_id: isRootNode ? null : parentId,
         is_root: isRootNode,
-        bpm: isRootNode ? bpm ?? 120 : null,
-        tag: null,
+        bpm: isRootNode ? bpmVal : null,
+        tag: genre || null,
         location: null,
         note: 0,
         user_id: user.id,
@@ -381,6 +492,12 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
     onClose();
   };
 
+  togglePreviewRef.current = () => {
+    if (mode !== "editing" || !hasBlob) return;
+    if (isPreviewing) handleStopPlay();
+    else handlePlay();
+  };
+
   if (!open) return null;
 
   const takeLen = Math.max(0, trimEnd - trimStart);
@@ -389,7 +506,6 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   const mixDuration = lanes.reduce((m, l) => Math.max(m, l.duration), 0);
   const liveElapsed = mode === "recording" ? Math.max(0, recElapsed) : 0;
   const totalDur = Math.max(mixDuration, takeLen, liveElapsed, 0.001);
-  const bpmVal = typeof bpm === "number" && bpm > 0 ? bpm : 120;
   const playheadTime =
     mode === "recording" ? Math.max(0, recElapsed) : audio.currentTime;
 
@@ -413,7 +529,10 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
               Count-in
             </span>
             <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-yellow-400/50 text-5xl font-bold text-yellow-400">
-              {Math.max(1, Math.ceil(Math.abs(recElapsed)))}
+              {Math.min(
+                COUNT_IN_BEATS,
+                Math.max(1, Math.ceil(-recElapsed / (60 / bpmVal)))
+              )}
             </div>
           </div>
         )}
@@ -463,10 +582,10 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
 
         {/* BODY */}
         <div className="max-h-[80vh] space-y-4 overflow-y-auto p-5">
-          {/* META : titre + instrument */}
+          {/* META : titre + instrument + genre */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
-              placeholder="Track title"
+              placeholder="Nom de la piste"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white placeholder-white/40 outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/40"
@@ -474,14 +593,37 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
             <select
               value={instrument}
               onChange={(e) => setInstrument(e.target.value)}
-              className="rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white outline-none transition focus:border-yellow-400/60 sm:w-48"
+              className={`rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm outline-none transition focus:border-yellow-400/60 sm:w-40 ${
+                instrument ? "text-white" : "text-white/40"
+              }`}
             >
+              <option value="" className="bg-neutral-900 text-white/40">
+                Instrument…
+              </option>
               {INSTRUMENT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt} className="bg-neutral-900">
+                <option key={opt} value={opt} className="bg-neutral-900 text-white">
                   {opt.toUpperCase()}
                 </option>
               ))}
             </select>
+            {isRoot && (
+              <select
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                className={`rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm outline-none transition focus:border-yellow-400/60 sm:w-40 ${
+                  genre ? "text-white" : "text-white/40"
+                }`}
+              >
+                <option value="" className="bg-neutral-900 text-white/40">
+                  Genre…
+                </option>
+                {GENRE_OPTIONS.map((g) => (
+                  <option key={g} value={g} className="bg-neutral-900 text-white">
+                    {g.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* TOOLBAR : entrée + temps */}
@@ -501,6 +643,56 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                 ))}
               </select>
             </label>
+
+            {isRoot && (
+              <div className="flex shrink-0 items-center gap-1 rounded-full bg-black/30 px-2 py-1">
+                <span className="text-[10px] uppercase tracking-wide text-white/50">
+                  BPM
+                </span>
+                <button
+                  onClick={() => setRootBpm((b) => Math.max(40, b - 1))}
+                  disabled={mode !== "idle"}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 disabled:opacity-30"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  value={rootBpm}
+                  disabled={mode !== "idle"}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(v)) setRootBpm(Math.min(300, Math.max(40, v)));
+                  }}
+                  className="w-9 bg-transparent text-center font-mono text-xs text-yellow-200 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button
+                  onClick={() => setRootBpm((b) => Math.min(300, b + 1))}
+                  disabled={mode !== "idle"}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 disabled:opacity-30"
+                >
+                  +
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                const next = !metronomeOn;
+                setMetronomeOn(next);
+                engineRef.current?.setMetronomeMuted(!next);
+              }}
+              title={metronomeOn ? "Métronome activé (couper le son)" : "Métronome coupé (activer le son)"}
+              className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wide transition ${
+                metronomeOn
+                  ? "bg-yellow-400/15 text-yellow-300"
+                  : "bg-black/30 text-white/45"
+              }`}
+            >
+              {metronomeOn ? <Volume2 size={12} /> : <VolumeX size={12} />}
+              Métro
+            </button>
 
             <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/30 px-3 py-1">
               <Timer size={12} className="text-yellow-300/80" />
@@ -560,45 +752,61 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
             </div>
           </div>
 
-          {/* TRAITEMENT (édition) */}
+          {/* TRAITEMENT (édition) : gain, normalize, fades, EQ, reverb */}
           {mode === "editing" && (
-            <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center">
-              <div className="flex flex-1 items-center gap-3">
-                <span className="w-9 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                  Gain
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  value={gain}
-                  onChange={(e) => handleGainChange(parseFloat(e.target.value))}
-                  className="h-1.5 flex-1 cursor-pointer accent-yellow-400"
-                />
-                <span className="w-10 text-right font-mono text-[11px] text-yellow-200">
-                  {gain.toFixed(2)}
-                </span>
+            <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex flex-1 items-center gap-3">
+                  <span className="w-9 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                    Gain
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    value={gain}
+                    onChange={(e) => handleGainChange(parseFloat(e.target.value))}
+                    className="h-1.5 flex-1 cursor-pointer accent-yellow-400"
+                  />
+                  <span className="w-10 text-right font-mono text-[11px] text-yellow-200">
+                    {gain.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDoNormalize((v) => !v)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
+                      doNormalize
+                        ? "bg-yellow-400 text-black"
+                        : "bg-white/10 text-white/70 hover:bg-white/15"
+                    }`}
+                  >
+                    <Wand2 size={13} /> Normalize
+                  </button>
+                  <button
+                    onClick={handleResetAlign}
+                    title="Recaler le début sur le temps 1"
+                    className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/15 hover:text-white"
+                  >
+                    <Crosshair size={13} /> Align
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDoNormalize((v) => !v)}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
-                    doNormalize
-                      ? "bg-yellow-400 text-black"
-                      : "bg-white/10 text-white/70 hover:bg-white/15"
-                  }`}
-                >
-                  <Wand2 size={13} /> Normalize
-                </button>
-                <button
-                  onClick={handleResetAlign}
-                  title="Recaler le début sur le temps 1"
-                  className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/15 hover:text-white"
-                >
-                  <Crosshair size={13} /> Align
-                </button>
+              <div className="h-px bg-white/10" />
+
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                <FxSlider label="Fade in" value={fadeIn} min={0} max={2} step={0.05} onChange={setFadeIn} format={(v) => `${v.toFixed(2)}s`} />
+                <FxSlider label="Fade out" value={fadeOut} min={0} max={2} step={0.05} onChange={setFadeOut} format={(v) => `${v.toFixed(2)}s`} />
+                <FxSlider label="Reverb" value={reverb} min={0} max={0.8} step={0.02} onChange={setReverb} format={(v) => `${Math.round((v / 0.8) * 100)}%`} />
+              </div>
+
+              <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+                <FxSlider label="EQ Low" value={eqLow} min={-12} max={12} step={1} onChange={setEqLow} format={(v) => `${v > 0 ? "+" : ""}${v} dB`} />
+                <FxSlider label="EQ Mid" value={eqMid} min={-12} max={12} step={1} onChange={setEqMid} format={(v) => `${v > 0 ? "+" : ""}${v} dB`} />
+                <FxSlider label="EQ High" value={eqHigh} min={-12} max={12} step={1} onChange={setEqHigh} format={(v) => `${v > 0 ? "+" : ""}${v} dB`} />
               </div>
             </div>
           )}
@@ -649,6 +857,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                 !hasBlob ||
                 !title.trim() ||
                 !instrument.trim() ||
+                (isRoot && !genre) ||
                 mode !== "editing"
               }
               className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-yellow-900/20 transition hover:from-yellow-400 hover:to-yellow-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"

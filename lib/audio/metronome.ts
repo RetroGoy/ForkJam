@@ -14,6 +14,7 @@ export class Metronome {
   private nextNoteTime = 0; // ctx time du prochain clic
   private beatIndex = 0; // 0 = temps fort
   private timerId: number | null = null;
+  private muted = false;
 
   // lookahead scheduler
   private readonly lookaheadMs = 25;
@@ -29,12 +30,17 @@ export class Metronome {
     if (bpm > 0) this.bpm = bpm;
   }
 
+  setMuted(muted: boolean) {
+    this.muted = muted;
+  }
+
   private secPerBeat() {
     return 60 / this.bpm;
   }
 
   // Un clic programmé à `time` (ctx time). Le temps fort est plus aigu.
   private click(time: number, accent: boolean) {
+    if (this.muted) return; // timing préservé, son coupé
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 

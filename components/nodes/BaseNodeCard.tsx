@@ -67,7 +67,13 @@ export function BaseNodeCard({
             <button onClick={(e) => stop(e, onUpvote)} className={voteBtn(userVote === 1)}>
               <ChevronUp size={15} />
             </button>
-            <span className="text-sm font-bold text-white">{score}</span>
+            <span
+              className={`text-sm font-bold ${
+                node.is_root ? "text-yellow-400" : "text-white"
+              }`}
+            >
+              {score}
+            </span>
             <button onClick={(e) => stop(e, onDownvote)} className={voteBtn(userVote === -1)}>
               <ChevronDown size={15} />
             </button>

@@ -21,9 +21,12 @@ import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 // ───────────────────────────────────────────
 // Layout constants
 // ───────────────────────────────────────────
-const H_SPACING = 320; // horizontal gap between generations
-const V_SPACING = 220; // vertical gap between leaves
-const PLUS_OFFSET_Y = 140; // distance from last child center to "+"
+const NODE_W = 300; // largeur uniforme des cartes
+const NODE_H = 132; // hauteur de référence (centrage vertical)
+const PLUS_SIZE = 40;
+const H_SPACING = NODE_W + 96; // pas horizontal entre générations
+const V_GAP = 44; // espace vertical entre lignes
+const EDGE_RADIUS = 18; // arrondi des coins d'edge (smoothstep)
 
 const EDGE_STYLE: React.CSSProperties = {
   stroke: "#facc15",
@@ -32,7 +35,7 @@ const EDGE_STYLE: React.CSSProperties = {
 
 function NodeUI({ data }: any) {
   return (
-    <div className="relative nodrag nopan">
+    <div className="relative nodrag nopan w-[300px]">
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <ChildNodeCard
         node={data.node}
@@ -121,140 +124,98 @@ export function NodeGraph({
     return map;
   }, [nodes]);
 
-  type LayoutInfo = {
-    y: number;
-    childrenY: number[];
-  };
   const buildGraph = useCallback(() => {
     const graphNodes: RFNode[] = [];
     const graphEdges: RFEdge[] = [];
 
-    const layoutInfos = new Map<string, LayoutInfo>();
-    let nextLeafIndex = 0;
+    const placed = new Map<string, { centerY: number; depth: number }>();
+    const plusCenters = new Map<string, number>();
 
-    const layoutSubtree = (id: string, depth: number): number => {
+    let cursorY = 0;
+
+    // Layout par le centre : chaque node a ses enfants + un "+" comme
+    // dernière branche. Un leaf partage sa ligne avec son "+" (à droite),
+    // un node parent pose son "+" juste sous ses enfants.
+    const layout = (id: string, depth: number): number => {
       const children = byParent.get(id) ?? [];
 
       if (children.length === 0) {
-        const y = nextLeafIndex * V_SPACING;
-        nextLeafIndex += 1;
-        layoutInfos.set(id, { y, childrenY: [] });
-        return y;
+        const centerY = cursorY + NODE_H / 2;
+        cursorY += NODE_H + V_GAP;
+        placed.set(id, { centerY, depth });
+        plusCenters.set(id, centerY);
+        return centerY;
       }
 
-      const childYs: number[] = [];
-      children.forEach((child: Node) => {
-        const cy = layoutSubtree(child.id, depth + 1);
-        childYs.push(cy);
-      });
+      const childCenters = children.map((c) => layout(c.id, depth + 1));
 
-      const first = childYs[0];
-      const last = childYs[childYs.length - 1];
-      const y = (first + last) / 2;
+      const plusCenterY = cursorY + PLUS_SIZE / 2;
+      cursorY += PLUS_SIZE + V_GAP;
+      plusCenters.set(id, plusCenterY);
 
-      layoutInfos.set(id, { y, childrenY: childYs });
-      return y;
+      const centerY = (childCenters[0] + plusCenterY) / 2;
+      placed.set(id, { centerY, depth });
+      return centerY;
     };
 
-    rootNodes.forEach((root: Node) => {
-      layoutSubtree(root.id, 0);
+    rootNodes.forEach((root) => layout(root.id, 0));
+
+    const edge = (source: string, target: string): RFEdge => ({
+      id: `${source}-${target}`,
+      source,
+      target,
+      type: "smoothstep",
+      pathOptions: { borderRadius: EDGE_RADIUS },
+      style: EDGE_STYLE,
     });
 
-    nodes.forEach((node: Node) => {
-      const info = layoutInfos.get(node.id);
-      if (!info) return;
+    for (const node of nodes) {
+      const p = placed.get(node.id);
+      if (!p) continue;
 
-      let depth = 0;
-      let current: Node | undefined = node;
-      while (current && current.parent_node_id) {
-        depth++;
-        current = nodes.find((n: Node) => n.id === current!.parent_node_id);
-      }
-
-      const posX = depth * H_SPACING;
-      const posY = info.y;
       const { colorClass } = computeNodeBase(node);
-
-        const nodeInBranch = branch.some((b) => b.id === node.id);
-        const nodeIsPlaying = transportPlaying && nodeInBranch;
-
-        const displayScore = node.is_root ? aggregate : scores[node.id] ?? 0;
-        const userVote = userVotes[node.id] ?? 0;
-
-        graphNodes.push({
-          id: node.id,
-          type: "node",
-          position: { x: posX, y: posY },
-          draggable: false,
-
-          data: {
-            node,
-            score: displayScore,
-            colorClass,
-            isPlaying: nodeIsPlaying,
-            isSelected: selectedNodeId === node.id,
-            userVote,
-            onPlayPause: () => onNodeSelect(node),
-            onUpvote: () => onVote(node.id, 1),
-            onDownvote: () => onVote(node.id, -1),
-            onAddChild: () => onAddChild(node),
-          },
-        });
-    });
-
-    byParent.forEach((children, parentId) => {
-      children.forEach((child: Node) => {
-        graphEdges.push({
-          id: `${parentId}-${child.id}`,
-          source: parentId,
-          target: child.id,
-          type: "step",
-          style: EDGE_STYLE,
-        });
-      });
-    });
-
-    nodes.forEach((node: Node) => {
-      const info = layoutInfos.get(node.id);
-      if (!info) return;
-
-      const children = byParent.get(node.id) ?? [];
-
-      let plusY: number;
-      if (children.length === 0) {
-        plusY = info.y + PLUS_OFFSET_Y;
-      } else {
-        const lastChild = children[children.length - 1];
-        const lastChildInfo = layoutInfos.get(lastChild.id);
-        const lastChildY = lastChildInfo ? lastChildInfo.y : info.y;
-        plusY = lastChildY + PLUS_OFFSET_Y;
-      }
-
-      let depth = 0;
-      let current: Node | undefined = node;
-      while (current && current.parent_node_id) {
-        depth++;
-        current = nodes.find((n: Node) => n.id === current!.parent_node_id);
-      }
-
-      const plusX = (depth + 1) * H_SPACING;
-      const plusId = `${node.id}-plus`;
+      const nodeIsPlaying =
+        transportPlaying && branch.some((b) => b.id === node.id);
+      const displayScore = node.is_root ? aggregate : scores[node.id] ?? 0;
+      const userVote = userVotes[node.id] ?? 0;
 
       graphNodes.push({
-        id: plusId,
-        type: "plus",
-        position: { x: plusX, y: plusY },
+        id: node.id,
+        type: "node",
+        position: { x: p.depth * H_SPACING, y: p.centerY - NODE_H / 2 },
         draggable: false,
-        data: { onAdd: () => onAddChild(node) },
+        data: {
+          node,
+          score: displayScore,
+          colorClass,
+          isPlaying: nodeIsPlaying,
+          isSelected: selectedNodeId === node.id,
+          userVote,
+          onPlayPause: () => onNodeSelect(node),
+          onUpvote: () => onVote(node.id, 1),
+          onDownvote: () => onVote(node.id, -1),
+        },
       });
 
-      graphEdges.push({
-        id: `${node.id}-${plusId}`,
-        source: node.id,
-        target: plusId,
-        type: "step",
-        style: EDGE_STYLE,
-      });
+      const plusCenterY = plusCenters.get(node.id);
+      if (plusCenterY != null) {
+        const plusId = `${node.id}-plus`;
+        graphNodes.push({
+          id: plusId,
+          type: "plus",
+          position: {
+            x: (p.depth + 1) * H_SPACING,
+            y: plusCenterY - PLUS_SIZE / 2,
+          },
+          draggable: false,
+          data: { onAdd: () => onAddChild(node) },
+        });
+        graphEdges.push(edge(node.id, plusId));
+      }
+    }
+
+    byParent.forEach((children, parentId) => {
+      children.forEach((child) => graphEdges.push(edge(parentId, child.id)));
     });
 
     return { graphNodes, graphEdges };
@@ -266,6 +227,7 @@ export function NodeGraph({
     onAddChild,
     onNodeSelect,
     transportPlaying,
+    branch,
     scores,
     aggregate,
     userVotes,

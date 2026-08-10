@@ -77,10 +77,39 @@ export async function createNode(payload: Partial<Node>) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Pseudo + département du créateur (affichés sur la carte du node).
+  // Source primaire = user_metadata (toujours lisible, pas de RLS).
+  // Secours = table users (nécessite une policy RLS "select own row").
+  const meta = (user?.user_metadata ?? {}) as {
+    username?: string;
+    department?: string | number;
+  };
+
+  const toDep = (v: unknown): number | null => {
+    if (v == null || String(v) === "") return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  };
+
+  let username = meta.username || "Unknown";
+  let location: number | null = toDep(meta.department) ?? payload.location ?? null;
+
+  if (user && (username === "Unknown" || location == null)) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("username, department")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (username === "Unknown" && profile?.username) username = profile.username;
+    if (location == null) location = toDep(profile?.department);
+  }
+
   const payloadWithUser = {
     ...payload,
     user_id: user?.id ?? null,
-    username: user?.user_metadata?.username ?? "Unknown",
+    username,
+    location,
   };
 
   const { data, error } = await supabase
@@ -185,6 +214,57 @@ export async function getVotesForNodes(nodeIds: string[]): Promise<NodeVote[]> {
   }
 
   return (data ?? []) as NodeVote[];
+}
+
+// Note agrégée d'un topic = somme des votes de TOUS ses nodes (sous-arbre).
+// Renvoie { rootId: score } pour les affichages de liste (Explore/Feed/Landing).
+export async function getTopicScores(): Promise<Record<string, number>> {
+  const [{ data: nodes }, { data: votes }] = await Promise.all([
+    supabase.from("nodes").select("id, parent_node_id"),
+    supabase.from("votes").select("target_id, value").eq("target_type", "node"),
+  ]);
+
+  if (!nodes) return {};
+
+  const parent: Record<string, string | null> = {};
+  for (const n of nodes as { id: string; parent_node_id: string | null }[]) {
+    parent[n.id] = n.parent_node_id ?? null;
+  }
+
+  const rootOf = (id: string) => {
+    let cur = id;
+    let guard = 0;
+    while (parent[cur] && guard++ < 1000) cur = parent[cur]!;
+    return cur;
+  };
+
+  const scores: Record<string, number> = {};
+  for (const v of (votes ?? []) as { target_id: string; value: number }[]) {
+    const root = rootOf(v.target_id);
+    scores[root] = (scores[root] ?? 0) + (v.value ?? 0);
+  }
+  return scores;
+}
+
+// Map chaque node -> l'id de son topic racine (pour lier vers /{root}).
+export async function getRootIdMap(): Promise<Record<string, string>> {
+  const { data } = await supabase.from("nodes").select("id, parent_node_id");
+
+  const parent: Record<string, string | null> = {};
+  for (const n of (data ?? []) as { id: string; parent_node_id: string | null }[]) {
+    parent[n.id] = n.parent_node_id ?? null;
+  }
+
+  const rootOf = (id: string) => {
+    let cur = id;
+    let guard = 0;
+    while (parent[cur] && guard++ < 1000) cur = parent[cur]!;
+    return cur;
+  };
+
+  const map: Record<string, string> = {};
+  for (const id of Object.keys(parent)) map[id] = rootOf(id);
+  return map;
 }
 
 export async function toggleNodeVote(

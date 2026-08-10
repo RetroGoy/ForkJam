@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { Clock, Music2, User, MapPin } from "lucide-react";
+import { Clock, Music2, User, MapPin, ChevronUp } from "lucide-react";
 import type { Node } from "@/lib/supabase/supabase";
 import { BaseNodeCard } from "./BaseNodeCard";
 import { computeNodeBase } from "./NodeBase";
@@ -75,6 +75,19 @@ export function NodeCard({
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wide">
+        {!onUpvote && (
+          <span
+            className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 ring-1 ring-white/10 ${
+              node.is_root
+                ? "bg-yellow-400/15 text-yellow-300"
+                : "bg-black/30 text-white/85"
+            }`}
+          >
+            <ChevronUp size={11} />
+            {displayScore}
+          </span>
+        )}
+
         {showTag && (
           <span className="inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-white/85 ring-1 ring-white/10">
             <Music2 size={10} />

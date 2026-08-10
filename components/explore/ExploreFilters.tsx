@@ -7,13 +7,13 @@ export function ExploreFilters() {
   const { selectedFilters, setSelectedFilters } = useRootSearch();
 
   // TES FILTRES ORIGINAUX
-  const styleOptions = ["Rock", "Electro", "Jazz", "Experimental", 'Indie', 'Blues', 'Metal', 'Pop', 'Dance', 'House', 
-    'Techno', 'Ambiant', 'Classical', 'World', 'Flok', 'Soundtrack', 'Reggae', 'Hip-Hop'] as const;
+  const styleOptions = ["Rock", "Electro", "Jazz", "Experimental", 'Indie', 'Blues', 'Metal', 'Pop', 'Dance', 'House',
+    'Techno', 'Ambiant', 'Classical', 'World', 'Folk', 'Soundtrack', 'Reggae', 'Hip-Hop'] as const;
 
   const filters = [
     { id: "recent", label: "Recent" },
     { id: "popular", label: "Popular" },
-    { id: "nearby", label: "Position" },
+    { id: "nearby", label: "Proche" },
     ...styleOptions.map((s) => ({ id: s.toLowerCase(), label: s })),
   ];
 
@@ -50,14 +50,11 @@ export function ExploreFilters() {
           <button
             key={f.id}
             onClick={() => toggleFilter(f.id)}
-            className={`
-              text-xs whitespace-nowrap px-3 py-1 rounded-[7px] transition-colors
-              ${
-                selectedFilters.includes(f.id)
-                  ? "bg-yellow-400 text-black"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-              }
-            `}
+            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              selectedFilters.includes(f.id)
+                ? "bg-yellow-400 text-black"
+                : "bg-muted text-muted-foreground hover:bg-muted/70"
+            }`}
           >
             {f.label}
           </button>

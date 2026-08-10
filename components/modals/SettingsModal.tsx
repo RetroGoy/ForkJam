@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/supabase";
-import { Loader2, User, MapPin } from "lucide-react";
+import { Loader2, MapPin, LogOut } from "lucide-react";
 import { useGlobalModal } from "./GlobalModal";
 
 type Profile = {
   id: string;
-  username: string;
   department: string | null;
 };
 
@@ -19,47 +18,24 @@ export function SettingsModal() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Chargement du profil
   useEffect(() => {
     (async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-
         if (!user) {
           setLoading(false);
           return;
         }
 
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("users")
-          .select("*")
+          .select("id, department")
           .eq("id", user.id)
           .maybeSingle();
 
-        if (error) {
-          console.error("Error loading profile", error);
-          setLoading(false);
-          return;
-        }
-
-        if (!data) {
-          // fallback si aucune ligne dans users
-          setProfile({
-            id: user.id,
-            username: user.user_metadata?.username ?? "",
-            department: null,
-          });
-        } else {
-          setProfile({
-            id: data.id,
-            username: data.username ?? "",
-            department: data.department ?? null,
-          });
-        }
-      } catch (e) {
-        console.error(e);
+        setProfile({ id: user.id, department: data?.department ?? null });
       } finally {
         setLoading(false);
       }
@@ -71,66 +47,58 @@ export function SettingsModal() {
     setSaving(true);
     setError("");
 
+    // Métadonnées auth = source lue par createNode (pas de RLS requise)
+    await supabase.auth.updateUser({ data: { department: profile.department } });
+
     const { error } = await supabase
       .from("users")
-      .update({
-        username: profile.username,
-        department: profile.department,
-      })
+      .update({ department: profile.department })
       .eq("id", profile.id);
 
+    setSaving(false);
     if (error) {
       setError(error.message);
-      setSaving(false);
       return;
     }
-
-    setSaving(false);
     close();
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/";
   };
 
   if (loading || !profile) {
     return (
-      <div className="py-10 flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-3 py-10">
         <Loader2 className="animate-spin" />
-        <p className="text-xs text-gray-400">Loading profile…</p>
+        <p className="text-xs text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   return (
     <div className="w-full">
-      {/* BARRE DE TITRE */}
-      <div className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-yellow-700 to-yellow-500 rounded-t-lg">
-        <span className="text-xs font-black tracking-[0.25em] text-black uppercase">
-          SETTINGS
+      <div className="flex items-center justify-center rounded-t-2xl bg-gradient-to-r from-yellow-600 to-yellow-400 px-4 py-2.5">
+        <span className="text-xs font-black uppercase tracking-[0.25em] text-black">
+          Settings
         </span>
       </div>
 
-      <div className="p-6 space-y-4">
-        {/* USERNAME */}
+      <div className="space-y-4 p-6">
         <div>
-          <label className="text-gray-300 text-xs uppercase">Username</label>
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Ta région (département FR)
+          </label>
           <div className="relative mt-1">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              type="text"
-              value={profile.username}
-              onChange={(e) =>
-                setProfile({ ...profile, username: e.target.value })
-              }
-              className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 text-sm"
+            <MapPin
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+              size={16}
             />
-          </div>
-        </div>
-
-        {/* DEPARTMENT */}
-        <div>
-          <label className="text-gray-300 text-xs uppercase">Department (FR)</label>
-          <div className="relative mt-1">
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
+              inputMode="numeric"
+              placeholder="69"
               value={profile.department ?? ""}
               onChange={(e) =>
                 setProfile({
@@ -138,24 +106,33 @@ export function SettingsModal() {
                   department: e.target.value.replace(/[^\d]/g, "").slice(0, 2),
                 })
               }
-              className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 text-sm"
+              className="w-full rounded-xl border border-white/10 bg-black/30 py-2 pl-10 pr-3 text-sm text-white outline-none transition focus:border-yellow-400/60"
             />
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Utilisée par le filtre « Proche » et affichée sur tes nodes.
+          </p>
         </div>
 
         {error && (
-          <p className="text-red-400 text-xs bg-red-900/20 border border-red-700/40 px-3 py-2 rounded">
+          <p className="rounded-xl border border-red-700/40 bg-red-900/20 px-3 py-2 text-xs text-red-400">
             {error}
           </p>
         )}
 
-        {/* SAVE */}
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-semibold py-2 rounded-md flex items-center justify-center gap-2"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-yellow-400 py-2 text-sm font-bold text-black transition hover:bg-yellow-300 disabled:opacity-50"
         >
-          {saving ? <Loader2 className="animate-spin" /> : "Save changes"}
+          {saving ? <Loader2 size={16} className="animate-spin" /> : "Enregistrer"}
+        </button>
+
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+        >
+          <LogOut size={16} /> Se déconnecter
         </button>
       </div>
     </div>

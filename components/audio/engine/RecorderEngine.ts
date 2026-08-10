@@ -24,8 +24,27 @@ import {
   getOutputLatency,
 } from "@/lib/audio/audioContext";
 import { Metronome } from "@/lib/audio/metronome";
-import { toMono, sliceMono, applyGain, normalize, hardClip } from "@/lib/audio/process";
+import {
+  toMono,
+  sliceMono,
+  applyGain,
+  normalize,
+  hardClip,
+  applyFades,
+} from "@/lib/audio/process";
+import { renderEffects } from "@/lib/audio/render";
 import { encodeWavMono } from "@/lib/audio/wav";
+
+export type TakeFx = {
+  gain?: number;
+  normalize?: boolean;
+  fadeIn?: number;
+  fadeOut?: number;
+  eqLow?: number;
+  eqMid?: number;
+  eqHigh?: number;
+  reverb?: number;
+};
 
 export type RecorderEvent =
   | "ready" // { duration, headTrim }
@@ -113,6 +132,10 @@ export class RecorderEngine {
     return this.latencyCal;
   }
 
+  setMetronomeMuted(muted: boolean) {
+    this.metro.setMuted(muted);
+  }
+
   // ─────────────────────────────────────────────────────────────
   // WAVEFORM (UI de trim uniquement)
   // ─────────────────────────────────────────────────────────────
@@ -160,12 +183,14 @@ export class RecorderEngine {
     deviceId?: string;
     countInBars?: number;
     beatsPerBar?: number;
+    metronome?: boolean;
   }): Promise<{ downbeatTime: number }> {
     const ctx = await resumeAudioContext();
     const bpm = opts.bpm && opts.bpm > 0 ? opts.bpm : 120;
     const countInBars = opts.countInBars ?? 1;
 
     this.metro = new Metronome(ctx, bpm, opts.beatsPerBar ?? 4);
+    this.metro.setMuted(opts.metronome === false);
     this.cleanupRecorder();
     this.livePeaks = [];
 
@@ -375,15 +400,43 @@ export class RecorderEngine {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // TRAITEMENT (trim + gain + normalize) -> buffer (lane/preview) & WAV
+  // TRAITEMENT
+  // Étage rapide (sync) : trim + gain + normalize + fades -> pour la lane.
+  // Étage complet (async) : + EQ 3 bandes + reverb (rendu offline) -> lecture/WAV.
   // ─────────────────────────────────────────────────────────────
-  buildProcessedTake(opts: { gain?: number; normalize?: boolean }): ProcessedTake | null {
+  private buildTakeSamples(opts: TakeFx): Float32Array | null {
     if (!this.alignedSamples) return null;
     const sr = this.alignedSR;
 
     const mono = sliceMono(this.alignedSamples, sr, this.trimStart, this.trimEnd);
     applyGain(mono, opts.gain ?? 1);
     if (opts.normalize) normalize(mono);
+    applyFades(mono, sr, opts.fadeIn ?? 0, opts.fadeOut ?? 0);
+    return mono;
+  }
+
+  // Version rapide (sans EQ/reverb) pour l'affichage de la lane.
+  buildTakeBuffer(opts: TakeFx): AudioBuffer | null {
+    const mono = this.buildTakeSamples(opts);
+    if (!mono) return null;
+    hardClip(mono);
+    const buffer = this.ctx.createBuffer(1, Math.max(1, mono.length), this.alignedSR);
+    buffer.copyToChannel(mono, 0);
+    return buffer;
+  }
+
+  // Version complète (EQ + reverb) pour la lecture et la sauvegarde.
+  async buildProcessedTake(opts: TakeFx): Promise<ProcessedTake | null> {
+    let mono = this.buildTakeSamples(opts);
+    if (!mono) return null;
+    const sr = this.alignedSR;
+
+    mono = await renderEffects(mono, sr, {
+      low: opts.eqLow ?? 0,
+      mid: opts.eqMid ?? 0,
+      high: opts.eqHigh ?? 0,
+      reverb: opts.reverb ?? 0,
+    });
     hardClip(mono);
 
     const buffer = this.ctx.createBuffer(1, Math.max(1, mono.length), sr);

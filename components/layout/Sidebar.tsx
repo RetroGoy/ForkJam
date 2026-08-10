@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Compass, Plus, Bell, Settings } from "lucide-react";
+import { User, Compass, Plus, Bell, Settings } from "lucide-react";
 import { useGlobalModal } from "@/components/modals/GlobalModal";
 
 function SidebarIcon({ icon: Icon, label, active, accent, onClick }: any) {
@@ -35,7 +35,7 @@ export function Sidebar() {
   const { open } = useGlobalModal();
 
   const nav = [
-    { label: "Home", href: "/feed", icon: Home },
+    { label: "Home", href: "/feed", icon: User },
     { label: "Explore", href: "/explore", icon: Compass },
     { label: "Notifications", onClick: () => open("notifications"), icon: Bell },
   ];

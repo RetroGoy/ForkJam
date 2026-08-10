@@ -1,29 +1,52 @@
 "use client";
 
 import React from "react";
-import { ArrowRight, User } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowRight } from "lucide-react";
 import { GlobalSearchBar } from "@/components/search/GlobalSearchBar";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+
+// Page de graphe = /{uuid}
+const UUID_RE =
+  /^\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export function AppHeader() {
   const router = useRouter();
+  const pathname = usePathname();
+
+  const hideSearch = pathname === "/feed" || UUID_RE.test(pathname);
 
   return (
-    <header className="flex items-center gap-3 h-14 bg-background/60 backdrop-blur px-4">
-      
-      {/* Search */}
-      <div className="flex-1 min-w-0">
-        <GlobalSearchBar />
-      </div>
+    <header className="flex h-14 items-center gap-3 bg-background/60 px-4 backdrop-blur">
+      {hideSearch ? (
+        <>
+          <Link href="/feed" className="flex items-center gap-2">
+            <Image
+              src="/logoFj.png"
+              alt="ForkJam"
+              width={28}
+              height={24}
+              className="opacity-90 md:hidden"
+            />
+            <span className="text-sm font-black tracking-[0.2em] text-yellow-400">
+              FORKJAM
+            </span>
+          </Link>
+          <div className="flex-1" />
+        </>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <GlobalSearchBar />
+        </div>
+      )}
 
-      {/* Enter */}
       <button
         onClick={() => router.push("/explore")}
-        className="w-10 h-10 flex items-center justify-center rounded-xl bg-muted hover:bg-muted/80"
+        className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted hover:bg-muted/80"
       >
         <ArrowRight size={20} />
       </button>
-
     </header>
   );
 }

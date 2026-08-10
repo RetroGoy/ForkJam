@@ -1,16 +1,76 @@
 "use client";
 /* eslint-disable react/no-unescaped-entities */
 
-import React, { useEffect, useState } from "react";
-import Image from "next/image";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { PlayCircle, Users, Trees, AudioWaveform } from "lucide-react";
-import { getRootNodes, type Node, supabase } from "@/lib/supabase/supabase";
+import { Users, Trees, AudioWaveform } from "lucide-react";
+import {
+  getRootNodes,
+  getTopicScores,
+  type Node,
+  supabase,
+} from "@/lib/supabase/supabase";
 import { NodeCard } from "@/components/nodes/NodeCard";
 import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 
+function ParallaxImage() {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    let raf = 0;
+
+    const update = () => {
+      raf = 0;
+      const wrap = wrapRef.current;
+      const img = imgRef.current;
+      if (!wrap || !img) return;
+
+      const rect = wrap.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      const progress = (vh - rect.top) / (vh + rect.height);
+      const clamped = Math.min(Math.max(progress, 0), 1);
+
+      const extra = Math.max(0, img.clientWidth - wrap.clientWidth);
+      const x = -clamped * extra;
+      img.style.transform = `translate3d(${x}px, 0, 0)`;
+    };
+
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+
+    update();
+    // capture = true pour capter le scroll du conteneur (html/body en overflow:hidden)
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="relative -mt-12 w-full overflow-hidden"
+    >
+      <img
+        ref={imgRef}
+        src="/images/parallax.png"
+        alt="ForkJam — graphe musical"
+        className="block w-[110%] max-w-none will-change-transform"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/30 to-transparent" />
+    </div>
+  );
+}
+
 export function LandingPage() {
   const [topics, setTopics] = useState<Node[]>([]);
+  const [topicScores, setTopicScores] = useState<Record<string, number>>({});
   const [user, setUser] = useState<any>(null);
 
     const audio = useAudioEngine();
@@ -41,6 +101,7 @@ export function LandingPage() {
     (async () => {
       const data = await getRootNodes();
       if (data) setTopics(data.slice(0, 6));
+      setTopicScores(await getTopicScores());
     })();
   }, []);
 
@@ -49,7 +110,7 @@ export function LandingPage() {
 
   return (
       <>
-      <section className="relative flex flex-col items-center px-6 py-24 sm:py-32 text-center overflow-y-auto overflow-x-hidden">
+      <section className="relative flex flex-col items-center pt-24 sm:pt-32 text-center overflow-y-auto overflow-x-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,229,80,0.08),transparent_70%)] pointer-events-none" />
 
         <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight text-yellow-400 drop-shadow-lg">
@@ -63,7 +124,7 @@ export function LandingPage() {
         <div className="mt-10 flex flex-col gap-4 sm:flex-row">
           <Link
             href="/auth/signup"
-            className="rounded-full bg-yellow-400 px-7 py-3 text-lg font-bold text-black shadow-lg shadow-yellow-900/20 transition hover:bg-yellow-300"
+            className="rounded-full bg-yellow-400 px-7 py-3 text-lg z-5 font-bold text-black shadow-lg shadow-yellow-900/20 transition hover:bg-yellow-300"
           >
             Commencer maintenant
           </Link>
@@ -75,17 +136,8 @@ export function LandingPage() {
             Explorer
           </a>
         </div>
-
-        {/* MINI GRAPH (remplace ou garde ton SVG/visuel) */}
-        <div className="mt-20 relative">
-          <Image
-            src="/parallax-graph.png"
-            alt="parallax graph"
-            width={700}
-            height={200}
-            className="opacity-90 mx-auto drop-shadow-xl"
-          />
-        </div>
+    
+        <ParallaxImage />
       </section>
 
       {/* SOCIAL PROOF */}
@@ -179,6 +231,7 @@ export function LandingPage() {
                   key={t.id}
                   node={t}
                   variant="root"
+                  score={topicScores[t.id] ?? 0}
                   isPlaying={playingThis}
                   onPlayPause={() => handleToggle(t)}
                 />

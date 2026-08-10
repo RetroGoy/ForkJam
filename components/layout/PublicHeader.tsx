@@ -59,7 +59,6 @@ export function PublicHeader() {
 
         {/* THEME + AUTH */}
         <div className="flex items-center gap-3">
-          {ThemeButton}
 
           <button
             onClick={() => open("signin")}

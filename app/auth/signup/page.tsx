@@ -29,10 +29,16 @@ export default function SignUpPage() {
         throw new Error("Please enter your department number.");
       }
 
-      // 1️⃣ Créer l'utilisateur dans auth.users
+      // 1️⃣ Créer l'utilisateur dans auth.users (+ métadonnées)
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: {
+          data: {
+            username: formData.username,
+            department: formData.department.trim(),
+          },
+        },
       });
 
       if (signUpError) throw signUpError;

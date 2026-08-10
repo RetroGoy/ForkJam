@@ -9,8 +9,10 @@ import {
   Play,
   Save,
   Loader2,
-  SlidersHorizontal,
-  Repeat,
+  Wand2,
+  Crosshair,
+  Timer,
+  Headphones,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -22,6 +24,7 @@ import {
   createNode,
 } from "@/lib/supabase/supabase";
 import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
+import { RecorderTracks, type RecorderLane, type TakeLane } from "./RecorderTracks";
 
 type RecorderMode = "idle" | "recording" | "editing";
 
@@ -34,17 +37,15 @@ interface RecorderModalProps {
   open: boolean;
   onClose: () => void;
 
-  // node relations
   parentId: string | null;
   isRoot?: boolean;
   bpm?: number | null;
 
-  // optional initial values (for root creation, etc.)
   initialTitle?: string;
   initialInstrument?: string;
 
-  // branch des parents à lire pendant record / preview
   branch?: BranchNode[];
+  parentNodes?: Node[]; // pistes parentes complètes (titre / instrument) pour les lanes
 
   onCreated?: (node: Node) => void;
 }
@@ -74,6 +75,8 @@ const INSTRUMENT_OPTIONS = [
   "other",
 ];
 
+const COUNT_IN_BARS = 1;
+
 export const RecorderModal: React.FC<RecorderModalProps> = ({
   open,
   onClose,
@@ -83,6 +86,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   initialTitle = "",
   initialInstrument = "",
   branch = [],
+  parentNodes = [],
   onCreated,
 }) => {
   const [title, setTitle] = useState(isRoot ? "Root Track" : initialTitle);
@@ -91,79 +95,70 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   );
 
   const [mode, setMode] = useState<RecorderMode>("idle");
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [recElapsed, setRecElapsed] = useState(0); // <0 = count-in
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasBlob, setHasBlob] = useState(false);
 
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
 
-  const [gain, setGain] = useState(1);
+  // traitement
+  const [gain, setGainValue] = useState(1);
+  const [doNormalize, setDoNormalize] = useState(true);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [hasBlob, setHasBlob] = useState(false);
 
-  const [countdown, setCountdown] = useState<number | null>(null);
+  // pistes parentes décodées -> vue multipiste DAW
+  const [lanes, setLanes] = useState<RecorderLane[]>([]);
+  // buffer de la prise (traité) affiché comme lane dans l'ensemble
+  const [takeLaneBuffer, setTakeLaneBuffer] = useState<AudioBuffer | null>(null);
 
   const engineRef = useRef<RecorderEngine | null>(null);
   const waveformRef = useRef<HTMLDivElement | null>(null);
 
-  // AudioEngine global (parents)
   const audio = useAudioEngine();
+  const isPreviewing = audio.isPlaying && mode === "editing";
 
-  // Stoppe l'audio global dès qu'on ouvre la modale
+  // Stoppe l'audio global à l'ouverture + init moteur global
   useEffect(() => {
-    if (open) {
-      audio.stop();
-    }
+    if (!open) return;
+    audio.init();
+    audio.stop();
+    audio.setOverdub(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // INIT ENGINE (stable)
+  // INIT recorder engine
   useEffect(() => {
     if (!open) return;
 
-    let engine = new RecorderEngine();
+    const engine = new RecorderEngine();
     engineRef.current = engine;
 
-    // attach waveform container si déjà rendu
-    if (waveformRef.current) {
-      engine.attachWaveform(waveformRef.current);
-    }
+    if (waveformRef.current) engine.attachWaveform(waveformRef.current);
 
-    // events
     engine.on("record-start", () => {
       setMode("recording");
-      setCurrentTime(0);
-      setDuration(0);
       setHasBlob(false);
+      setRecElapsed(-COUNT_IN_BARS); // affiche le count-in
     });
 
-    engine.on("record-stop", () => {
-      // on attend "ready" pour passer en editing
-      console.log("Recorder: record-stop");
-    });
+    engine.on("tick", (elapsed: number) => setRecElapsed(elapsed));
 
-    engine.on("ready", (dur: number) => {
-      setDuration(dur);
-      setTrimStart(0);
-      setTrimEnd(dur);
+    engine.on("ready", ({ duration, headTrim }: { duration: number; headTrim: number }) => {
+      setTrimStart(headTrim);
+      setTrimEnd(duration);
       setMode("editing");
       setHasBlob(true);
     });
 
-    engine.on("tick", (t: number) => setCurrentTime(t));
-    engine.on("trim-change", (s, e) => {
+    engine.on("trim-change", (s: number, e: number) => {
       setTrimStart(s);
       setTrimEnd(e);
     });
 
-    engine.on("play", () => setIsPlaying(true));
-    engine.on("stop", () => setIsPlaying(false));
-
-    // load devices
+    // liste des entrées audio
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -180,59 +175,88 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
     return () => {
       engine.destroy();
       engineRef.current = null;
+      audio.stop();
+      audio.setOverdub(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // re-attach waveform if ref arrives after engine
+  // re-attache la waveform si le ref arrive après le moteur
   useEffect(() => {
     if (!open) return;
     const engine = engineRef.current;
-    if (engine && waveformRef.current) {
-      engine.attachWaveform(waveformRef.current);
-    }
-  }, [open, waveformRef]);
+    if (engine && waveformRef.current) engine.attachWaveform(waveformRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  // Countdown → déclenche record + parents au moment 0
+  // Précharge les pistes parentes -> lanes multipiste (look DAW)
   useEffect(() => {
     if (!open) return;
-    if (countdown === null) return;
+    let cancelled = false;
+    (async () => {
+      if (!branch || branch.length === 0) {
+        setLanes([]);
+        return;
+      }
+      await audio.loadBranch(branch);
+      if (cancelled) return;
+      const eng = audio.engine;
+      if (!eng) return;
+      const built: RecorderLane[] = [];
+      for (const pn of parentNodes) {
+        const tr = eng.getTrack(pn.id);
+        if (tr) {
+          built.push({
+            id: pn.id,
+            buffer: tr.buffer,
+            title: pn.title ?? "Track",
+            instr: pn.instrument ?? "unknown",
+            duration: tr.duration,
+          });
+        }
+      }
+      setLanes(built);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-    if (countdown === 0) {
-      setCountdown(null);
-      void startRecordingWithParents();
+  // Recalcule la lane statique de la prise (trim + normalize) pour l'ensemble.
+  useEffect(() => {
+    if (mode !== "editing" || !hasBlob) {
+      setTakeLaneBuffer(null);
       return;
     }
-
-    const t = setTimeout(() => {
-      setCountdown((c) => (c === null ? null : c - 1));
-    }, 1000);
-
-    return () => clearTimeout(t);
+    const take = engineRef.current?.buildProcessedTake({ normalize: doNormalize });
+    setTakeLaneBuffer(take?.buffer ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown, open]);
+  }, [mode, hasBlob, trimStart, trimEnd, doNormalize]);
 
-  const startRecordingWithParents = async () => {
+  // ── RECORD (count-in + parents calés sur le temps 1) ──
+  const handleStartRecording = async () => {
     const engine = engineRef.current;
     if (!engine) return;
 
+    const bpmToUse = typeof bpm === "number" && bpm > 0 ? bpm : 120;
+
     try {
-      setMode("recording");
-      setCurrentTime(0);
-      setDuration(0);
-      setHasBlob(false);
+      audio.stop();
+      audio.setOverdub(null);
 
-      // charge les parents dans l'audio engine et joue
-      if (branch && branch.length > 0) {
-        await audio.loadBranch(branch);
-        audio.play();
-      } else {
-        audio.stop();
-      }
+      // 1) précharge les parents AVANT d'armer (pour un départ précis)
+      if (branch.length > 0) await audio.loadBranch(branch);
 
-      await engine.startRecording(
-        bpm ?? undefined,
-        selectedDeviceId || undefined
-        );
+      // 2) arme l'enregistrement + count-in -> renvoie le temps 1
+      const { downbeatTime } = await engine.arm({
+        bpm: bpmToUse,
+        deviceId: selectedDeviceId || undefined,
+        countInBars: COUNT_IN_BARS,
+      });
+
+      // 3) lance les parents EXACTEMENT sur le temps 1
+      if (branch.length > 0) audio.playAt(downbeatTime);
     } catch (err) {
       console.error("Error starting recording", err);
       toast.error("Erreur lors de l'accès au micro");
@@ -241,67 +265,44 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
     }
   };
 
-const handleStartRecording = async () => {
-  const engine = engineRef.current;
-  if (!engine) return;
-
-  try {
-    setMode("recording");
-    setCurrentTime(0);
-    setDuration(0);
-    setHasBlob(false);
-
-    // BPM réel (depuis ton topic)
-    const bpmToUse =
-      typeof bpm === "number" && bpm > 0 ? bpm : 120;
-
-    // IMPORTANT : premier argument = BPM, second = deviceId
-    await engine.startRecording(bpmToUse, selectedDeviceId || undefined);
-
-  } catch (err) {
-    console.error("Error starting recording", err);
-    toast.error("Erreur lors de l'accès au micro");
-    setMode("idle");
-    audio.stop();
-  }
-};
-
   const handleStopRecording = () => {
     engineRef.current?.stopRecording();
     audio.stop();
   };
 
+  // ── PREVIEW = parents + prise, même horloge ──
   const handlePlay = async () => {
-    if (!hasBlob) return;
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || !engine.hasRecording()) return;
 
-    // PREVIEW = PARENTS + ENREGISTREMENT
-    try {
-      if (branch && branch.length > 0) {
-        await audio.loadBranch(branch);
-        audio.play();
-      } else {
-        audio.stop();
-      }
-
-      engine.play();
-    } catch (err) {
-      console.error("Error play preview", err);
-      toast.error("Erreur lecture preview");
+    const take = engine.buildProcessedTake({ normalize: doNormalize });
+    if (!take) {
+      toast.error("Rien à lire");
+      return;
     }
+
+    audio.stop();
+    if (branch.length > 0) await audio.loadBranch(branch);
+    audio.setOverdub(take.buffer, gain);
+    audio.play();
   };
 
   const handleStopPlay = () => {
-    engineRef.current?.stop();
     audio.stop();
+  };
+
+  const handleGainChange = (v: number) => {
+    setGainValue(v);
+    audio.setOverdubGain(v); // feedback live pendant la preview
+  };
+
+  const handleResetAlign = () => {
+    engineRef.current?.resetHeadTrim();
   };
 
   const handleSave = async () => {
     const engine = engineRef.current;
-    if (!engine) return;
-
-    if (!hasBlob) {
+    if (!engine || !engine.hasRecording()) {
       toast.error("Enregistre une piste avant de sauvegarder");
       return;
     }
@@ -310,14 +311,7 @@ const handleStartRecording = async () => {
       return;
     }
 
-    const blob = engine.getBlob();
-    if (!blob) {
-      toast.error("Aucune prise disponible");
-      return;
-    }
-
     setIsSaving(true);
-
     try {
       const {
         data: { user },
@@ -328,25 +322,30 @@ const handleStartRecording = async () => {
         return;
       }
 
-      // upload audio file
-      const fileName = `node-${user.id}-${Date.now()}.webm`;
-      const publicUrl = await uploadAudio(blob, fileName);
+      // traitement final : trim + gain + normalize -> WAV
+      const take = engine.buildProcessedTake({ gain, normalize: doNormalize });
+      if (!take || take.samples.length < 1024) {
+        toast.error("Prise trop courte");
+        setIsSaving(false);
+        return;
+      }
+      const wav = engine.encodeWav(take);
+
+      const fileName = `node-${user.id}-${Date.now()}.wav`;
+      const publicUrl = await uploadAudio(wav, fileName, "audio/wav");
       if (!publicUrl) {
         toast.error("Échec de l'upload audio");
         setIsSaving(false);
         return;
       }
 
-      const { start, end } = engine.getTrim();
       const isRootNode = isRoot === true;
-      const parent = isRootNode ? null : parentId;
-
       const payload: Partial<Node> = {
         title,
         description: null,
         audio_url: publicUrl,
         instrument,
-        parent_node_id: parent,
+        parent_node_id: isRootNode ? null : parentId,
         is_root: isRootNode,
         bpm: isRootNode ? bpm ?? 120 : null,
         tag: null,
@@ -363,6 +362,8 @@ const handleStartRecording = async () => {
       }
 
       toast.success("Node créé !");
+      audio.stop();
+      audio.setOverdub(null);
       onCreated?.(newNode);
       setIsSaving(false);
       onClose();
@@ -376,187 +377,290 @@ const handleStartRecording = async () => {
   const handleClose = () => {
     if (isSaving) return;
     audio.stop();
+    audio.setOverdub(null);
     onClose();
   };
 
   if (!open) return null;
 
-  const hasRecording = hasBlob;
+  const takeLen = Math.max(0, trimEnd - trimStart);
+  const countingIn = mode === "recording" && recElapsed < 0;
+
+  const mixDuration = lanes.reduce((m, l) => Math.max(m, l.duration), 0);
+  const liveElapsed = mode === "recording" ? Math.max(0, recElapsed) : 0;
+  const totalDur = Math.max(mixDuration, takeLen, liveElapsed, 0.001);
+  const bpmVal = typeof bpm === "number" && bpm > 0 ? bpm : 120;
+  const playheadTime =
+    mode === "recording" ? Math.max(0, recElapsed) : audio.currentTime;
+
+  // la prise, comme lane du même ensemble : live pendant le record, statique ensuite
+  let take: TakeLane = { mode: "none" };
+  if (mode === "recording" && !countingIn) {
+    const peaks = engineRef.current?.getLivePeaks() ?? [];
+    take = { mode: "live", peaks, version: peaks.length };
+  } else if (mode === "editing" && takeLaneBuffer) {
+    take = { mode: "static", buffer: takeLaneBuffer, duration: takeLen };
+  }
+  const showTracks = lanes.length > 0 || take.mode !== "none";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="w-full max-w-3xl rounded-md bg-black/80 border border-gray-700 p-4 shadow-2xl relative">
-        {/* CLOSE */}
-        <button
-          onClick={handleClose}
-          className="absolute top-3 right-3 text-gray-400 hover:text-white"
-        >
-          <X size={18} />
-        </button>
-
-        {/* HEADER */}
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs uppercase tracking-wide text-yellow-400">
-              {isRoot ? "CREATE ROOT TRACK" : "ADD BRANCH TRACK"}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl">
+        {/* COUNT-IN OVERLAY */}
+        {countingIn && (
+          <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm">
+            <span className="text-[11px] uppercase tracking-[0.3em] text-yellow-300/80">
+              Count-in
             </span>
-            {typeof bpm === "number" && (
-              <span className="text-[11px] text-gray-400">
-                BPM:{" "}
-                <span className="text-yellow-300 font-semibold">{bpm}</span>
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-gray-400">
-            {mode === "recording" && (
-              <span className="text-red-400 flex items-center gap-1">
-                <Repeat size={12} /> Recording…
-              </span>
-            )}
-            {mode === "editing" && (
-              <span className="text-green-300">
-                Editing – {formatTime(trimStart)} → {formatTime(trimEnd)}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* COUNTDOWN OVERLAY */}
-        {countdown !== null && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
-            <div className="text-5xl font-bold text-yellow-400">
-              {countdown === 0 ? "GO" : countdown}
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-yellow-400/50 text-5xl font-bold text-yellow-400">
+              {Math.max(1, Math.ceil(Math.abs(recElapsed)))}
             </div>
           </div>
         )}
 
-        {/* TITLE + INSTRUMENT */}
-        <div className="flex flex-col md:flex-row gap-3 mb-3">
-          <input
-            placeholder="Track title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="flex-1 px-3 py-2 bg-background border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-          />
-          <select
-            value={instrument}
-            onChange={(e) => setInstrument(e.target.value)}
-            className="flex-1 px-3 py-2 bg-background border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-          >
-            {INSTRUMENT_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt.toUpperCase()}
-              </option>
-            ))}
-          </select>
+        {/* TITLE BAR */}
+        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-yellow-500 to-yellow-300 px-5 py-3">
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[11px] font-black uppercase tracking-[0.22em] text-black">
+              {isRoot ? "Create root track" : "Add branch track"}
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-black/70">
+              <span className="font-semibold">{bpmVal} BPM</span>
+              {branch.length > 0 && (
+                <>
+                  <span className="text-black/40">·</span>
+                  <span>
+                    {branch.length} parent{branch.length > 1 ? "s" : ""}
+                  </span>
+                  <span className="text-black/40">·</span>
+                  <Headphones size={12} />
+                  <span>headphones</span>
+                </>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {mode === "recording" && !countingIn && (
+              <span className="flex items-center gap-1.5 rounded-full bg-black/15 px-2.5 py-1 text-[11px] font-bold text-black">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                REC
+              </span>
+            )}
+            {mode === "editing" && (
+              <span className="rounded-full bg-black/15 px-2.5 py-1 text-[11px] font-semibold text-black">
+                {formatTime(takeLen)}
+              </span>
+            )}
+            <button
+              onClick={handleClose}
+              className="rounded-full p-1.5 text-black/60 transition hover:bg-black/10 hover:text-black"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        {/* INPUT + TIMER + MONITOR */}
-        <div className="flex flex-col md:flex-row gap-3 mb-3 text-xs text-gray-300 items-center justify-between">
-          <div className="flex items-center gap-2 w-full md:w-2/3">
-            <span className="whitespace-nowrap">Input</span>
+        {/* BODY */}
+        <div className="max-h-[80vh] space-y-4 overflow-y-auto p-5">
+          {/* META : titre + instrument */}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              placeholder="Track title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white placeholder-white/40 outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/40"
+            />
             <select
-              value={selectedDeviceId}
-              onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="flex-1 px-2 py-1 bg-background border border-gray-700 rounded text-xs"
+              value={instrument}
+              onChange={(e) => setInstrument(e.target.value)}
+              className="rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white outline-none transition focus:border-yellow-400/60 sm:w-48"
             >
-              {devices.length === 0 && (
-                <option value="">(no input device)</option>
-              )}
-              {devices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  {d.label || d.deviceId || "Audio input"}
+              {INSTRUMENT_OPTIONS.map((opt) => (
+                <option key={opt} value={opt} className="bg-neutral-900">
+                  {opt.toUpperCase()}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-yellow-300">
-              <span className="text-[11px] uppercase tracking-wide">TIME</span>
-              <span className="font-mono text-sm">
-                {formatTime(currentTime)} / {formatTime(duration)}
+          {/* TOOLBAR : entrée + temps */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-white/60">
+              <Mic size={13} className="shrink-0 text-white/50" />
+              <select
+                value={selectedDeviceId}
+                onChange={(e) => setSelectedDeviceId(e.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-xs text-white/80 outline-none"
+              >
+                {devices.length === 0 && <option value="">(no input device)</option>}
+                {devices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId} className="bg-neutral-900">
+                    {d.label || d.deviceId || "Audio input"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/30 px-3 py-1">
+              <Timer size={12} className="text-yellow-300/80" />
+              <span className="font-mono text-xs text-yellow-200">
+                {mode === "recording"
+                  ? formatTime(Math.max(0, recElapsed))
+                  : `${formatTime(audio.currentTime)} / ${formatTime(takeLen)}`}
               </span>
             </div>
           </div>
-        </div>
 
-        {/* WAVEFORM */}
-        <div className="mb-3">
-          <div className="w-full h-24 bg-black/60 border border-gray-800 rounded-md overflow-hidden">
-            <div
-              ref={waveformRef}
-              className="w-full h-full"
-              style={{ transform: "translateZ(0)" }}
-            />
-          </div>
-        </div>
+          {/* ENSEMBLE MULTIPISTE : parents + prise */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
+                {countingIn
+                  ? "Get ready…"
+                  : mode === "recording"
+                  ? "Laying down your take…"
+                  : "Session"}
+              </span>
+              {mode !== "recording" && (
+                <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
+                  {lanes.length} track{lanes.length !== 1 ? "s" : ""}
+                  {take.mode !== "none" ? " + take" : ""}
+                </span>
+              )}
+            </div>
 
-        {/* CONTROLS */}
-        <div className="flex flex-col md:flex-row gap-3 items-center justify-between mt-2">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            {mode !== "recording" && (
-              <button
-                onClick={handleStartRecording}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-700 hover:bg-red-800 text-white text-sm font-medium"
-                disabled={countdown !== null}
-              >
-                <Mic size={16} />
-                <span>Record</span>
-              </button>
-            )}
-
-            {mode === "recording" && (
-              <button
-                onClick={handleStopRecording}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-yellow-500 hover:bg-yellow-600 text-black text-sm font-medium"
-              >
-                <Square size={16} />
-                <span>Stop</span>
-              </button>
-            )}
-
-            {mode === "editing" && hasRecording && (
-              <>
-                {!isPlaying ? (
-                  <button
-                    onClick={handlePlay}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-800 text-white text-sm font-medium"
-                  >
-                    <Play size={16} />
-                    <span>Play</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleStopPlay}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium"
-                  >
-                    <Square size={16} />
-                    <span>Stop</span>
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={
-              isSaving ||
-              !hasRecording ||
-              !title.trim() ||
-              !instrument.trim() ||
-              mode !== "editing"
-            }
-            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <Loader2 size={16} className="animate-spin" />
+            {showTracks ? (
+              <RecorderTracks
+                lanes={lanes}
+                take={take}
+                takeInstr={instrument}
+                totalDuration={totalDur}
+                currentTime={playheadTime}
+                bpm={bpmVal}
+              />
             ) : (
-              <Save size={16} />
+              <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-white/10 bg-black/20 text-xs text-white/40">
+                Appuie sur Record pour poser une première prise
+              </div>
             )}
-            <span>Save Track</span>
-          </button>
+
+            {/* TRIM (secondaire, en édition) */}
+            <div className={mode === "editing" ? "space-y-1" : "hidden"}>
+              <span className="px-0.5 text-[10px] uppercase tracking-[0.15em] text-white/40">
+                Trim in / out
+              </span>
+              <div className="h-16 w-full overflow-hidden rounded-xl border border-white/10 bg-black/30 px-1">
+                <div
+                  ref={waveformRef}
+                  className="h-full w-full"
+                  style={{ transform: "translateZ(0)" }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* TRAITEMENT (édition) */}
+          {mode === "editing" && (
+            <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center">
+              <div className="flex flex-1 items-center gap-3">
+                <span className="w-9 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                  Gain
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.01}
+                  value={gain}
+                  onChange={(e) => handleGainChange(parseFloat(e.target.value))}
+                  className="h-1.5 flex-1 cursor-pointer accent-yellow-400"
+                />
+                <span className="w-10 text-right font-mono text-[11px] text-yellow-200">
+                  {gain.toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDoNormalize((v) => !v)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
+                    doNormalize
+                      ? "bg-yellow-400 text-black"
+                      : "bg-white/10 text-white/70 hover:bg-white/15"
+                  }`}
+                >
+                  <Wand2 size={13} /> Normalize
+                </button>
+                <button
+                  onClick={handleResetAlign}
+                  title="Recaler le début sur le temps 1"
+                  className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/15 hover:text-white"
+                >
+                  <Crosshair size={13} /> Align
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TRANSPORT + SAVE */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              {mode !== "recording" && (
+                <button
+                  onClick={handleStartRecording}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-900/30 transition hover:bg-red-500 sm:flex-none"
+                >
+                  <Mic size={16} /> {mode === "editing" ? "Re-record" : "Record"}
+                </button>
+              )}
+
+              {mode === "recording" && (
+                <button
+                  onClick={handleStopRecording}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-yellow-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-yellow-300 sm:flex-none"
+                >
+                  <Square size={16} /> Stop
+                </button>
+              )}
+
+              {mode === "editing" && hasBlob && !isPreviewing && (
+                <button
+                  onClick={handlePlay}
+                  className="flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15"
+                >
+                  <Play size={16} className="text-yellow-300" /> Play mix
+                </button>
+              )}
+              {mode === "editing" && hasBlob && isPreviewing && (
+                <button
+                  onClick={handleStopPlay}
+                  className="flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15"
+                >
+                  <Square size={16} /> Stop
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={handleSave}
+              disabled={
+                isSaving ||
+                !hasBlob ||
+                !title.trim() ||
+                !instrument.trim() ||
+                mode !== "editing"
+              }
+              className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-yellow-900/20 transition hover:from-yellow-400 hover:to-yellow-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+            >
+              {isSaving ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Save size={16} />
+              )}
+              Save Track
+            </button>
+          </div>
         </div>
       </div>
     </div>

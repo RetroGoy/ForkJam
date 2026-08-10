@@ -3,36 +3,26 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Compass, Plus, Bell, Settings, Sun, Moon } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Home, Compass, Plus, Bell, Settings } from "lucide-react";
 import { useGlobalModal } from "@/components/modals/GlobalModal";
 
-function SidebarIcon({ icon: Icon, label, active, onClick }: any) {
+function SidebarIcon({ icon: Icon, label, active, accent, onClick }: any) {
   return (
-    <div className="relative group">
+    <div className="group relative">
       <button
         onClick={onClick}
-        className={`
-          flex items-center justify-center w-11 h-11 rounded-xl transition
-          ${active 
-            ? "bg-yellow-400/20 text-yellow-300"
-            : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-          }
-        `}
+        className={`flex h-11 w-11 items-center justify-center rounded-xl transition ${
+          accent
+            ? "bg-yellow-400 text-black shadow-lg shadow-yellow-900/30 hover:bg-yellow-300"
+            : active
+            ? "bg-yellow-400/15 text-yellow-300"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+        }`}
       >
-        <Icon size={26} />
+        <Icon size={24} />
       </button>
 
-      {/* Tooltip */}
-      <span
-        className="
-          pointer-events-none absolute left-full top-1/2 ml-2 -translate-y-1/2
-          whitespace-nowrap text-xs px-2 py-1 rounded-xl
-          bg-black text-white opacity-0 z-50
-          translate-x-2 group-hover:opacity-60 group-hover:translate-x-0 
-          transition-all duration-150
-        "
-      >
+      <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-[8px] bg-black/90 px-2 py-1 text-xs text-white opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100">
         {label}
       </span>
     </div>
@@ -42,7 +32,6 @@ function SidebarIcon({ icon: Icon, label, active, onClick }: any) {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const { open } = useGlobalModal();
 
   const nav = [
@@ -52,41 +41,37 @@ export function Sidebar() {
   ];
 
   const isActive = (href?: string) =>
-    href && (pathname === href || pathname.startsWith(href));
+    !!href && (pathname === href || pathname.startsWith(href));
 
   return (
-    <aside className="flex flex-col h-full w-16 border-r border-border bg-background/95 backdrop-blur">
-
-      {/* LOGO */}
-      <div className="h-16 flex items-center justify-center">
+    <div className="flex h-full w-full flex-col">
+      <div className="flex h-16 items-center justify-center">
         <Link href="/feed">
           <Image
             src="/logoFj.png"
             width={40}
             height={38}
             alt="ForkJam"
-            className="opacity-90"
+            className="opacity-90 transition hover:opacity-100"
           />
         </Link>
       </div>
 
-      {/* NAV */}
-      <nav className="flex flex-col items-center gap-6 mt-4 flex-1">
-
+      <nav className="mt-4 flex flex-1 flex-col items-center gap-5">
         {nav.map(({ label, href, onClick, icon }) => (
           <SidebarIcon
             key={label}
             icon={icon}
             label={label}
-            active={href && isActive(href)}
+            active={isActive(href)}
             onClick={onClick ?? (() => router.push(href!))}
           />
         ))}
 
-        {/* CREATE */}
         <SidebarIcon
           icon={Plus}
           label="Create"
+          accent
           onClick={() =>
             window.dispatchEvent(
               new CustomEvent("forkjam:open-recorder", { detail: { mode: "root" } })
@@ -95,21 +80,13 @@ export function Sidebar() {
         />
       </nav>
 
-      {/* FOOTER */}
       <div className="flex flex-col items-center gap-4 py-4">
-{/* 
-        <SidebarIcon
-          icon={theme === "dark" ? Sun : Moon}
-          label="Theme"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        />
- */}
         <SidebarIcon
           icon={Settings}
           label="Settings"
           onClick={() => open("settings")}
         />
       </div>
-    </aside>
+    </div>
   );
 }

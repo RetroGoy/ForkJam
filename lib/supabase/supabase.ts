@@ -168,66 +168,84 @@ export async function getUserVoteForNode(nodeId: string): Promise<1 | -1 | 0> {
   return data?.value ?? 0;
 }
 
+export type NodeVote = { target_id: string; value: number; user_id: string };
+
+export async function getVotesForNodes(nodeIds: string[]): Promise<NodeVote[]> {
+  if (nodeIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("votes")
+    .select("target_id, value, user_id")
+    .eq("target_type", "node")
+    .in("target_id", nodeIds);
+
+  if (error) {
+    console.error("Error fetching votes:", error);
+    return [];
+  }
+
+  return (data ?? []) as NodeVote[];
+}
+
 export async function toggleNodeVote(
   nodeId: string,
   value: 1 | -1
-): Promise<void> {
+): Promise<boolean> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return false;
 
   const { data: existing } = await supabase
     .from("votes")
-    .select("*")
+    .select("value")
     .eq("user_id", user.id)
     .eq("target_type", "node")
     .eq("target_id", nodeId)
     .maybeSingle();
 
-  // remove vote if same value
   if (existing && existing.value === value) {
-    await supabase
+    const { error } = await supabase
       .from("votes")
       .delete()
       .eq("user_id", user.id)
       .eq("target_type", "node")
       .eq("target_id", nodeId);
-    return;
+    return !error;
   }
 
-  // insert if no existing
   if (!existing) {
-    await supabase.from("votes").insert({
+    const { error } = await supabase.from("votes").insert({
       user_id: user.id,
       target_type: "node",
       target_id: nodeId,
       value,
     });
-    return;
+    return !error;
   }
 
-  // update
-  await supabase
+  const { error } = await supabase
     .from("votes")
     .update({ value })
     .eq("user_id", user.id)
     .eq("target_type", "node")
     .eq("target_id", nodeId);
+  return !error;
 }
 
 // STORAGE
 
 export async function uploadAudio(
   file: Blob,
-  path: string
+  path: string,
+  contentType = "audio/webm"
 ): Promise<string | null> {
   const { data, error } = await supabase.storage
     .from("recordings")
     .upload(path, file, {
       cacheControl: "3600",
       upsert: false,
-      contentType: "audio/webm",
+      contentType,
     });
 
   if (error) {

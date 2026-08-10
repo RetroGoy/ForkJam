@@ -26,8 +26,8 @@ const V_SPACING = 220; // vertical gap between leaves
 const PLUS_OFFSET_Y = 140; // distance from last child center to "+"
 
 const EDGE_STYLE: React.CSSProperties = {
-  stroke: "#FFD84A",
-  strokeWidth: 5,
+  stroke: "#facc15",
+  strokeWidth: 3,
 };
 
 function NodeUI({ data }: any) {
@@ -39,6 +39,7 @@ function NodeUI({ data }: any) {
         score={data.score}
         colorClass={data.colorClass}
         isPlaying={data.isPlaying}
+        userVote={data.userVote}
         onPlayPause={data.onPlayPause}
         onUpvote={data.onUpvote}
         onDownvote={data.onDownvote}
@@ -52,12 +53,12 @@ function PlusUI({ data }: any) {
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
-      <div
+      <button
         onClick={data.onAdd}
-        className="flex items-center justify-center w-10 h-10 bg-yellow-600 text-black rounded-[6px] cursor-pointer hover:bg-yellow-500 transition"
+        className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-400 text-lg font-bold text-black shadow-lg shadow-yellow-900/30 transition hover:scale-105 hover:bg-yellow-300"
       >
         +
-      </div>
+      </button>
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>
   );
@@ -75,6 +76,10 @@ interface NodeGraphProps {
   onNodeSelect: (node: Node) => void;
   onAddChild: (node: Node) => void;
   selectedNodeId?: string | null;
+  scores: Record<string, number>;
+  aggregate: number;
+  userVotes: Record<string, 1 | -1 | 0>;
+  onVote: (nodeId: string, value: 1 | -1) => void;
 }
 
 // ───────────────────────────────────────────
@@ -89,6 +94,10 @@ export function NodeGraph({
   onNodeSelect,
   onAddChild,
   selectedNodeId = null,
+  scores,
+  aggregate,
+  userVotes,
+  onVote,
 }: NodeGraphProps) {
 
   const { branch, isPlaying: transportPlaying } = useAudioEngine();
@@ -116,8 +125,6 @@ export function NodeGraph({
     y: number;
     childrenY: number[];
   };
-  console.log("computeNodeBase =", computeNodeBase);
-
   const buildGraph = useCallback(() => {
     const graphNodes: RFNode[] = [];
     const graphEdges: RFEdge[] = [];
@@ -166,10 +173,13 @@ export function NodeGraph({
 
       const posX = depth * H_SPACING;
       const posY = info.y;
-      const { score, colorClass } = computeNodeBase(node);
+      const { colorClass } = computeNodeBase(node);
 
         const nodeInBranch = branch.some((b) => b.id === node.id);
         const nodeIsPlaying = transportPlaying && nodeInBranch;
+
+        const displayScore = node.is_root ? aggregate : scores[node.id] ?? 0;
+        const userVote = userVotes[node.id] ?? 0;
 
         graphNodes.push({
           id: node.id,
@@ -179,13 +189,14 @@ export function NodeGraph({
 
           data: {
             node,
-            score,
-            colorClass, 
+            score: displayScore,
+            colorClass,
             isPlaying: nodeIsPlaying,
             isSelected: selectedNodeId === node.id,
+            userVote,
             onPlayPause: () => onNodeSelect(node),
-            onUpvote: () => {},
-            onDownvote: () => {},
+            onUpvote: () => onVote(node.id, 1),
+            onDownvote: () => onVote(node.id, -1),
             onAddChild: () => onAddChild(node),
           },
         });
@@ -247,7 +258,19 @@ export function NodeGraph({
     });
 
     return { graphNodes, graphEdges };
-  }, [nodes, rootNodes, byParent, selectedNodeId, onAddChild, onNodeSelect, transportPlaying]);
+  }, [
+    nodes,
+    rootNodes,
+    byParent,
+    selectedNodeId,
+    onAddChild,
+    onNodeSelect,
+    transportPlaying,
+    scores,
+    aggregate,
+    userVotes,
+    onVote,
+  ]);
 
   useEffect(() => {
     const { graphNodes, graphEdges } = buildGraph();

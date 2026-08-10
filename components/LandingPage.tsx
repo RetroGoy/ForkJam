@@ -60,17 +60,17 @@ export function LandingPage() {
           Explorez, enregistrez, étendez. Ensemble.
         </p>
 
-        <div className="mt-10 flex flex-col sm:flex-row gap-4">
+        <div className="mt-10 flex flex-col gap-4 sm:flex-row">
           <Link
             href="/auth/signup"
-            className="px-6 py-3 rounded-md bg-yellow-400 text-black font-bold text-lg hover:bg-yellow-300 transition"
+            className="rounded-full bg-yellow-400 px-7 py-3 text-lg font-bold text-black shadow-lg shadow-yellow-900/20 transition hover:bg-yellow-300"
           >
             Commencer maintenant
           </Link>
 
           <a
             href="#landing-gallery"
-            className="px-6 py-3 rounded-md bg-muted text-muted-foreground hover:bg-muted/80 transition text-lg"
+            className="rounded-full border border-white/10 bg-white/5 px-7 py-3 text-lg text-foreground/80 transition hover:bg-white/10 hover:text-foreground"
           >
             Explorer
           </a>
@@ -95,13 +95,13 @@ export function LandingPage() {
         </p>
 
         <div className="mt-4 flex flex-wrap justify-center gap-4 opacity-80 text-xs text-muted-foreground">
-          <span className="px-3 py-1 rounded-full border border-border bg-muted/10">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
             Beatmakers indépendants
           </span>
-          <span className="px-3 py-1 rounded-full border border-border bg-muted/10">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
             Guitaristes & chanteurs
           </span>
-          <span className="px-3 py-1 rounded-full border border-border bg-muted/10">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
             Producteurs en ligne
           </span>
         </div>
@@ -118,7 +118,7 @@ export function LandingPage() {
           faites pousser un arbre musical à plusieurs mains.
         </p>
 
-        <div className="relative rounded-xl border border-border bg-black/40 shadow-xl overflow-hidden">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-xl">
           <video
             autoPlay
             loop
@@ -135,7 +135,7 @@ export function LandingPage() {
       <section className="py-10 sm:py-20 px-6 bg-background/60 backdrop-blur border-t border-border">
         <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-10 text-center">
 
-          <div className="p-6 rounded-[7px] bg-muted/20 border border-border hover:bg-muted/30 transition">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition hover:bg-white/[0.06]">
             <AudioWaveform size={42} className="mx-auto text-yellow-400 mb-4" />
             <h3 className="text-md sm:text-xl font-bold mb-2">Créer instantanément</h3>
             <p className="text-muted-foreground text-sm sm:text-md">
@@ -143,7 +143,7 @@ export function LandingPage() {
             </p>
           </div>
 
-          <div className="p-6 rounded-[7px] bg-muted/20 border border-border hover:bg-muted/30 transition">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition hover:bg-white/[0.06]">
             <Trees size={42} className="mx-auto text-yellow-400 mb-4" />
             <h3 className="text-md sm:text-xl font-bold mb-2">Faire pousser des branches</h3>
             <p className="text-muted-foreground text-sm sm:text-md">
@@ -152,7 +152,7 @@ export function LandingPage() {
             </p>
           </div>
 
-          <div className="p-6 rounded-[7px] bg-muted/20 border border-border hover:bg-muted/30 transition">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition hover:bg-white/[0.06]">
             <Users size={42} className="mx-auto text-yellow-400 mb-4" />
             <h3 className="text-md sm:text-xl font-bold mb-2">Collaborer facilement</h3>
             <p className="text-muted-foreground text-sm sm:text-md">
@@ -186,7 +186,9 @@ export function LandingPage() {
             })}
           </div>
         ) : (
-          <p>Aucun topic pour le moment.</p>
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-12 text-center text-sm text-muted-foreground">
+            Aucun topic pour le moment.
+          </div>
         )}
       </section>
 
@@ -203,7 +205,7 @@ export function LandingPage() {
 
         <Link
           href="/auth/signup"
-          className="px-8 py-4 rounded-md bg-yellow-400 text-black font-bold text-lg hover:bg-yellow-300 transition"
+          className="inline-block rounded-full bg-yellow-400 px-8 py-4 text-lg font-bold text-black shadow-lg shadow-yellow-900/20 transition hover:bg-yellow-300"
         >
           S'inscrire
         </Link>

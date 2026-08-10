@@ -19,10 +19,15 @@ interface AudioState {
   init: () => void;
   loadBranch: (branch: BranchNode[]) => Promise<void>;
   play: () => void;
+  playAt: (ctxStartTime: number) => void;
   pause: () => void;
   stop: () => void;
   seek: (ratio: number) => void;
   setGain: (id: string, v: number) => void;
+
+  // overdub local (prise en cours, non sauvegardée)
+  setOverdub: (buffer: AudioBuffer | null, gain?: number) => void;
+  setOverdubGain: (v: number) => void;
 }
 
 export const useAudioEngine = create<AudioState>((set, get) => ({
@@ -34,15 +39,15 @@ export const useAudioEngine = create<AudioState>((set, get) => ({
   isPlaying: false,
 
   init: () => {
-    if (get().engine) return; // déjà initialisé
-
-    // Sécurité : browser only
+    if (get().engine) return;
     if (typeof window === "undefined") return;
 
     const engine = new AudioEngine();
 
     engine.subscribe((t, d) => {
-      set({ currentTime: t, duration: d });
+      // fin de lecture naturelle -> on repasse en pause
+      const done = d > 0 && t >= d;
+      set({ currentTime: t, duration: d, isPlaying: done ? false : get().isPlaying });
     });
 
     set({ engine });
@@ -60,39 +65,50 @@ export const useAudioEngine = create<AudioState>((set, get) => ({
   play: () => {
     const engine = get().engine;
     if (!engine) return;
-
     engine.play();
+    set({ isPlaying: true });
+  },
+
+  playAt: (ctxStartTime) => {
+    const engine = get().engine;
+    if (!engine) return;
+    engine.playAt(ctxStartTime);
     set({ isPlaying: true });
   },
 
   pause: () => {
     const engine = get().engine;
     if (!engine) return;
-
     engine.pause();
     set({ isPlaying: false });
   },
 
-stop: () => {
-  const engine = get().engine;
-  if (!engine) return;
-
-  engine.stop();
-  set({ currentTime: 0, isPlaying: false }); // ← AJOUT OBLIGATOIRE
-},
+  stop: () => {
+    const engine = get().engine;
+    if (!engine) return;
+    engine.stop();
+    set({ currentTime: 0, isPlaying: false });
+  },
 
   seek: (ratio) => {
     const engine = get().engine;
     if (!engine) return;
-
     engine.seek(ratio);
     set({ currentTime: engine.getCurrentTime() });
   },
 
   setGain: (id, v) => {
+    get().engine?.setGain(id, v);
+  },
+
+  setOverdub: (buffer, gain = 1) => {
     const engine = get().engine;
     if (!engine) return;
+    engine.setOverdub(buffer, gain);
+    set({ duration: engine.getDuration() });
+  },
 
-    engine.setGain(id, v);
+  setOverdubGain: (v) => {
+    get().engine?.setOverdubGain(v);
   },
 }));

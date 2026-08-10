@@ -137,6 +137,24 @@ html, body {
   scrollbar-width: none;
 }
 
+.react-flow__controls {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.react-flow__controls-button {
+  background: rgba(20, 20, 24, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e5e5e5;
+}
+.react-flow__controls-button:hover {
+  background: rgba(42, 42, 48, 0.95);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
 .bg-dot-pattern {
   background-color: hsl(var(--background));
   background-image: radial-gradient(

@@ -8,27 +8,20 @@ import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
 import { useGlobalModal } from "@/components/modals/GlobalModal";
 
-type AuthMode = "signin" | "signup";
-
 export function PublicHeader() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
-  const [authMode, setAuthMode] = React.useState<AuthMode | null>(null);
   const { open } = useGlobalModal();
 
   React.useEffect(() => setMounted(true), []);
 
   const isActive = (href: string) => pathname === href;
 
-  const openAuth = (mode: AuthMode) => {
-    window.dispatchEvent(new CustomEvent("forkjam:open-auth", { detail: { mode } }));
-  };
-
   const ThemeButton = mounted ? (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="p-2 rounded bg-muted hover:bg-muted/80 transition"
+      className="rounded-xl bg-muted p-2 text-foreground/80 transition hover:bg-muted/80 hover:text-foreground"
     >
       {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
     </button>
@@ -70,14 +63,14 @@ export function PublicHeader() {
 
           <button
             onClick={() => open("signin")}
-            className="hidden sm:inline-flex items-center justify-center rounded-sm border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+            className="hidden items-center justify-center rounded-full border border-border px-4 py-1.5 text-xs font-semibold transition hover:bg-muted sm:inline-flex"
           >
             Sign in
           </button>
 
           <button
             onClick={() => open("signup")}
-            className="inline-flex items-center justify-center rounded-sm bg-yellow-400 px-3 py-1.5 text-xs font-bold text-black hover:bg-yellow-300"
+            className="inline-flex items-center justify-center rounded-full bg-yellow-400 px-4 py-1.5 text-xs font-bold text-black shadow-sm transition hover:bg-yellow-300"
           >
             Get started
           </button>

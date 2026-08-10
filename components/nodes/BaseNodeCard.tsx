@@ -11,21 +11,19 @@ interface BaseNodeCardProps {
   node: Node;
   colorClass: string;
   score: number;
-
+  userVote?: 1 | -1 | 0;
   href?: string;
-
   isPlaying?: boolean;
   onPlayPause?: () => void;
-
   onUpvote?: (e: React.MouseEvent) => void;
   onDownvote?: (e: React.MouseEvent) => void;
-
-  children?: React.ReactNode; // contenu custom (root / child / list)
+  children?: React.ReactNode;
 }
 
 export function BaseNodeCard({
   node,
   score,
+  userVote = 0,
   isPlaying,
   onPlayPause,
   onUpvote,
@@ -36,51 +34,57 @@ export function BaseNodeCard({
 }: BaseNodeCardProps) {
   const Wrapper = href ? (props: any) => <Link href={href} {...props} /> : "div";
 
+  const stop = (e: React.MouseEvent, fn?: (e: React.MouseEvent) => void) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fn?.(e);
+  };
+
+  const voteBtn = (active: boolean) =>
+    `flex h-7 w-7 items-center justify-center rounded-full transition ${
+      active
+        ? "bg-yellow-400 text-black"
+        : "bg-black/30 text-white/80 hover:bg-black/50 hover:text-white"
+    }`;
+
   return (
     <Wrapper
       className={cn(
-        "relative block rounded-[7px] overflow-hidden border border-border shadow-sm transition-all hover:shadow-lg",
-        colorClass, // <-- la vraie couleur visible
-        href && "hover:scale-[1.01] hover:border-primary/40"
+        "group relative block overflow-hidden rounded-2xl border border-white/10 shadow-lg transition-all",
+        colorClass,
+        href &&
+          "cursor-pointer hover:-translate-y-0.5 hover:shadow-xl hover:ring-1 hover:ring-white/20"
       )}
     >
-      {/* BACKGROUND INSTRUMENT */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
+      <div className="pointer-events-none absolute inset-0 z-0">
         <InstrumentBackground instrument={node.instrument} />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/10 via-black/20 to-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/10 via-black/35 to-black/70" />
       </div>
 
-      {/* CONTENT */}
-      <div className="relative flex gap-3 p-3 z-10">
-        {/* VOTES */}
+      <div className="relative z-10 flex gap-3 p-3.5">
         {onUpvote && onDownvote && (
-          <div className="flex flex-col items-center w-10 shrink-0 mt-1">
-            <button
-              onClick={onUpvote}
-              className="w-7 h-7 flex items-center justify-center rounded-[7px] bg-muted/50 hover:bg-muted/70"
-            >
-              <ChevronUp size={14} />
+          <div className="flex w-9 shrink-0 flex-col items-center gap-1">
+            <button onClick={(e) => stop(e, onUpvote)} className={voteBtn(userVote === 1)}>
+              <ChevronUp size={15} />
             </button>
-
-            <span className="text-sm font-bold py-1">{score}</span>
-
-            <button
-              onClick={onDownvote}
-              className="w-7 h-7 flex items-center justify-center rounded-[7px] bg-muted/50 hover:bg-muted/70"
-            >
-              <ChevronDown size={14} />
+            <span className="text-sm font-bold text-white">{score}</span>
+            <button onClick={(e) => stop(e, onDownvote)} className={voteBtn(userVote === -1)}>
+              <ChevronDown size={15} />
             </button>
           </div>
         )}
 
-        {/* MAIN CONTENT */}
-        <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <div className="relative flex min-w-0 flex-1 flex-col gap-1">
           {onPlayPause && (
             <button
-              onClick={onPlayPause}
-              className="absolute top-2 right-2 w-10 h-10 bg-black/30 hover:bg-black/40 rounded-lg flex items-center justify-center"
+              onClick={(e) => stop(e, () => onPlayPause())}
+              className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white transition hover:bg-black/60"
             >
-              {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+              {isPlaying ? (
+                <Pause size={16} />
+              ) : (
+                <Play size={16} className="translate-x-[1px]" />
+              )}
             </button>
           )}
 

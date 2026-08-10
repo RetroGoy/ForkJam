@@ -1,6 +1,5 @@
 export function getColorClass(tag?: string) {
   const t = (tag ?? "").toLowerCase();
-console.log("TAG RECUS =", t);
   if (t.includes("jazz")) return "bg-red-700";
   if (t.includes("blues")) return "bg-orange-700";
   if (t.includes("rock")) return "bg-amber-700";

@@ -1,382 +1,436 @@
 // components/audio/engine/RecorderEngine.ts
 // ------------------------------------------------------------
-// PURE ENGINE – no React, no JSX.
-// Handles recording, playback, trimming, metronome, timeline syncing.
-// UI must call attachWaveform(container) to render the waveform.
+// Enregistrement calé sur l'horloge audio partagée + METERING LIVE.
+//
+// Chaîne : getUserMedia -> MediaStreamSource -> MediaStreamDestination
+//          -> MediaRecorder   (et -> AnalyserNode pour la waveform live)
+//
+// Synchro : count-in programmé sur ctx.currentTime, le "temps 1"
+// (downbeatTime) est renvoyé pour lancer les parents dessus. leadOffset
+// = durée de prise avant le temps 1.
+//
+// Après stop : on décode, on rogne la tête (leadOffset + latence) pour
+// que la prise ALIGNÉE démarre pile au temps 1 -> elle s'intègre comme
+// une lane du même multipiste que les parents. Le WAV sauvegardé est
+// cette version alignée + trim + gain + normalize.
 // ------------------------------------------------------------
 
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 
+import {
+  getAudioContext,
+  resumeAudioContext,
+  getOutputLatency,
+} from "@/lib/audio/audioContext";
+import { Metronome } from "@/lib/audio/metronome";
+import { toMono, sliceMono, applyGain, normalize, hardClip } from "@/lib/audio/process";
+import { encodeWavMono } from "@/lib/audio/wav";
+
 export type RecorderEvent =
-  | "ready"        // duration known
+  | "ready" // { duration, headTrim }
   | "record-start"
   | "record-stop"
-  | "play"
-  | "stop"
-  | "tick"         // currentTime: number
+  | "tick" // elapsed seconds (depuis le temps 1, <0 = count-in)
   | "trim-change"; // (start, end)
 
 type Listener = (...args: any[]) => void;
 
+export type LivePeak = { t: number; v: number };
+
+export type ProcessedTake = {
+  buffer: AudioBuffer;
+  samples: Float32Array;
+  sampleRate: number;
+};
+
 export class RecorderEngine {
-  // --------- recording -----------
+  private ctx: AudioContext;
+  private metro: Metronome;
+
+  // --------- recording graph -----------
+  private stream: MediaStream | null = null;
+  private inputSource: MediaStreamAudioSourceNode | null = null;
+  private dest: MediaStreamAudioDestinationNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private meterBuf: Float32Array = new Float32Array(1024);
   private mediaRecorder: MediaRecorder | null = null;
   private recordChunks: Blob[] = [];
-  private recordingStartTime = 0;
+  private mime = "audio/webm";
 
-  // --------- audio data ----------
+  // --------- timing / sync -------------
+  private recStartCtxTime = 0;
+  private downbeatTime = 0;
+  private leadOffset = 0;
+  private latencyCal: number;
+
+  // --------- live metering -------------
+  private livePeaks: LivePeak[] = [];
+
+  // --------- audio data (aligné) -------
   private blob: Blob | null = null;
-  private audioURL: string | null = null;
+  private audioURL: string | null = null; // WAV aligné (pour wavesurfer)
+  private alignedSamples: Float32Array | null = null;
+  private alignedSR = 44100;
+  private alignedDuration = 0;
 
-  // --------- waveform ------------
-  private waveformContainer: HTMLElement | null = null;
-  private waveform: WaveSurfer | null = null;
-  private regions: any = null;
-
-  // --------- playback ------------
-  private audioEl: HTMLAudioElement | null = null;
-
-  // --------- state ---------------
-  private duration = 0;
+  // --------- trim (relatif au clip aligné) ---
+  private headTrim = 0;
   private trimStart = 0;
   private trimEnd = 0;
 
+  // --------- waveform (UI trim) --------
+  private waveform: WaveSurfer | null = null;
+  private regions: any = null;
+
   private raf: number | null = null;
 
-  // --------- metronome -----------
-  private metroCtx: AudioContext | null = null;
-  private metroIntervalId: number | null = null;
-  private metroBpm = 120;
-
-  // --------- events --------------
   private listeners: Record<RecorderEvent, Listener[]> = {
     ready: [],
     "record-start": [],
     "record-stop": [],
-    play: [],
-    stop: [],
     tick: [],
     "trim-change": [],
   };
 
+  constructor() {
+    this.ctx = getAudioContext();
+    this.metro = new Metronome(this.ctx);
+    this.latencyCal = getOutputLatency(this.ctx) + 0.02;
+  }
+
   on(event: RecorderEvent, cb: Listener) {
     this.listeners[event].push(cb);
   }
-
   private emit(event: RecorderEvent, ...args: any[]) {
     for (const cb of this.listeners[event]) cb(...args);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // WAVEFORM
-  // ─────────────────────────────────────────────────────────────
-
-  attachWaveform(container: HTMLElement) {
-    this.cleanupWaveform();
-    this.waveformContainer = container;
-
-    this.waveform = WaveSurfer.create({
-      container: this.waveformContainer,
-      waveColor: "#fbbf24",
-      progressColor: "#ffffff",
-      barWidth: 2,
-      height: 64,
-    });
-
-    const plugin = (RegionsPlugin as any).create({
-      dragSelection: true,
-    });
-    this.regions = this.waveform.registerPlugin(plugin);
-
-    this.waveform.on("ready", () => {
-      this.duration = this.waveform!.getDuration();
-      this.trimStart = 0;
-      this.trimEnd = this.duration;
-
-      const region = this.regions.addRegion({
-        start: 0,
-        end: this.duration,
-        color: "rgba(255, 200, 0, 0.25)",
-        drag: true,
-        resize: true,
-      });
-
-      region.on("update-end", (r: any) => {
-        this.setTrim(r.start, r.end);
-      });
-
-      this.emit("ready", this.duration);
-    });
-
-    if (this.audioURL) {
-      this.waveform.load(this.audioURL);
-    }
+  setLatencyCal(sec: number) {
+    this.latencyCal = sec;
+  }
+  getLatencyCal() {
+    return this.latencyCal;
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LIFE CYCLE
+  // WAVEFORM (UI de trim uniquement)
   // ─────────────────────────────────────────────────────────────
-
-  destroy() {
-    this.stopPlayback();
-    this.cleanupRecorder();
+  attachWaveform(container: HTMLElement) {
     this.cleanupWaveform();
-    this.stopMetronome();
 
-    if (this.audioURL) {
-      URL.revokeObjectURL(this.audioURL);
-      this.audioURL = null;
-    }
+    this.waveform = WaveSurfer.create({
+      container,
+      waveColor: "#fde047",
+      progressColor: "#ffffff",
+      barWidth: 2,
+      height: 48,
+    });
 
-    this.listeners = {
-      ready: [],
-      "record-start": [],
-      "record-stop": [],
-      play: [],
-      stop: [],
-      tick: [],
-      "trim-change": [],
-    };
+    const plugin = (RegionsPlugin as any).create({ dragSelection: false });
+    this.regions = this.waveform.registerPlugin(plugin);
 
-    if (this.metroCtx) {
-      this.metroCtx.close();
-      this.metroCtx = null;
-    }
+    this.waveform.on("ready", () => {
+      this.alignedDuration = this.waveform!.getDuration();
+      if (this.trimEnd <= 0) this.trimEnd = this.alignedDuration;
+      this.drawRegion();
+    });
+
+    if (this.audioURL) this.waveform.load(this.audioURL);
+  }
+
+  private drawRegion() {
+    if (!this.regions) return;
+    this.regions.clearRegions();
+    const region = this.regions.addRegion({
+      start: this.trimStart,
+      end: this.trimEnd,
+      color: "rgba(255, 200, 0, 0.18)",
+      drag: true,
+      resize: true,
+    });
+    region.on("update-end", (r: any) => this.setTrim(r.start, r.end));
   }
 
   // ─────────────────────────────────────────────────────────────
   // RECORDING
   // ─────────────────────────────────────────────────────────────
+  async arm(opts: {
+    bpm?: number;
+    deviceId?: string;
+    countInBars?: number;
+    beatsPerBar?: number;
+  }): Promise<{ downbeatTime: number }> {
+    const ctx = await resumeAudioContext();
+    const bpm = opts.bpm && opts.bpm > 0 ? opts.bpm : 120;
+    const countInBars = opts.countInBars ?? 1;
 
-  async startRecording(bpm?: number, deviceId?: string) {
-    const constraints: MediaStreamConstraints = {
-      audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-    };
-
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
+    this.metro = new Metronome(ctx, bpm, opts.beatsPerBar ?? 4);
     this.cleanupRecorder();
-    this.stopPlayback(); // on arrête une éventuelle lecture précédente
+    this.livePeaks = [];
 
-    this.recordChunks = [];
-    const recorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm",
+    const audioConstraints: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+    if (opts.deviceId) audioConstraints.deviceId = { exact: opts.deviceId };
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: audioConstraints,
+    });
+    this.stream = stream;
+
+    // graphe d'entrée : source -> dest (record) et source -> analyser (live)
+    this.inputSource = ctx.createMediaStreamSource(stream);
+    this.dest = ctx.createMediaStreamDestination();
+    this.inputSource.connect(this.dest);
+
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this.meterBuf = new Float32Array(this.analyser.fftSize);
+    this.inputSource.connect(this.analyser);
+
+    this.mime = this.pickMime();
+    const recorder = new MediaRecorder(this.dest.stream, {
+      mimeType: this.mime,
       audioBitsPerSecond: 128000,
     });
     this.mediaRecorder = recorder;
-    this.recordingStartTime = performance.now();
+    this.recordChunks = [];
 
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.recordChunks.push(e.data);
     };
-
-    recorder.onstop = () => {
-      const blob = new Blob(this.recordChunks, { type: "audio/webm" });
-      this.setBlob(blob);
-      this.emit("record-stop");
-      stream.getTracks().forEach((t) => t.stop());
-      this.stopMetronome();
-    };
-
-    // métronome
-    if (bpm && bpm > 0) {
-      this.startMetronome(bpm);
-    } else {
-      this.startMetronome(120);
-    }
+    recorder.onstop = () => void this.finalizeRecording();
 
     recorder.start();
+    this.recStartCtxTime = ctx.currentTime;
+
+    const prep = 0.15;
+    const firstClick = this.recStartCtxTime + prep;
+    this.downbeatTime = this.metro.scheduleCountIn(firstClick, countInBars);
+    this.metro.start(this.downbeatTime);
+    this.leadOffset = this.downbeatTime - this.recStartCtxTime;
+
+    this.startRecTick();
     this.emit("record-start");
+    return { downbeatTime: this.downbeatTime };
   }
 
   stopRecording() {
-    if (!this.mediaRecorder) return;
-    if (this.mediaRecorder.state !== "inactive") {
+    this.metro.stop();
+    this.stopRecTick();
+    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
       this.mediaRecorder.stop();
-      this.mediaRecorder.stream.getTracks().forEach((t) => t.stop());
     }
-    this.mediaRecorder = null;
-    this.stopMetronome();
+  }
+
+  private async finalizeRecording() {
+    this.metro.stop();
+    if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
+
+    const blob = new Blob(this.recordChunks, { type: this.mime });
+    this.blob = blob;
+
+    let decoded: AudioBuffer | null = null;
+    try {
+      const arr = await blob.arrayBuffer();
+      decoded = await this.ctx.decodeAudioData(arr);
+    } catch (e) {
+      console.error("decodeAudioData failed", e);
+    }
+
+    if (!decoded) {
+      this.emit("record-stop");
+      return;
+    }
+
+    const sr = decoded.sampleRate;
+    const fullDuration = decoded.duration;
+
+    // rogne la tête pour aligner le t=0 sur le temps 1 musical
+    this.headTrim = Math.min(
+      Math.max(0, this.leadOffset + this.latencyCal),
+      fullDuration
+    );
+
+    const fullMono = toMono(decoded);
+    this.alignedSamples = sliceMono(fullMono, sr, this.headTrim, fullDuration);
+    this.alignedSR = sr;
+    this.alignedDuration = this.alignedSamples.length / sr;
+
+    this.trimStart = 0;
+    this.trimEnd = this.alignedDuration;
+
+    // WAV aligné pour la waveform de trim (wavesurfer)
+    const alignedWav = encodeWavMono(this.alignedSamples, sr);
+    if (this.audioURL) URL.revokeObjectURL(this.audioURL);
+    this.audioURL = URL.createObjectURL(alignedWav);
+    if (this.waveform) this.waveform.load(this.audioURL);
+
+    this.emit("record-stop");
+    this.emit("ready", {
+      duration: this.alignedDuration,
+      headTrim: this.headTrim,
+    });
+    this.emit("trim-change", this.trimStart, this.trimEnd);
+  }
+
+  // Réinitialise le trim au clip aligné complet.
+  resetHeadTrim() {
+    this.setTrim(0, this.alignedDuration);
+    this.drawRegion();
+  }
+
+  private pickMime(): string {
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/mp4",
+    ];
+    for (const c of candidates) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c)) {
+        return c;
+      }
+    }
+    return "audio/webm";
   }
 
   private cleanupRecorder() {
     if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
-      this.mediaRecorder.stop();
-      this.mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+      try {
+        this.mediaRecorder.stop();
+      } catch {}
     }
     this.mediaRecorder = null;
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    }
+    try {
+      this.inputSource?.disconnect();
+    } catch {}
+    try {
+      this.analyser?.disconnect();
+    } catch {}
+    this.inputSource = null;
+    this.analyser = null;
+    this.dest = null;
     this.recordChunks = [];
   }
 
   // ─────────────────────────────────────────────────────────────
-  // METRONOME
+  // REC TICK + LIVE PEAKS
   // ─────────────────────────────────────────────────────────────
+  private startRecTick() {
+    this.stopRecTick();
+    const loop = () => {
+      const elapsed = this.ctx.currentTime - this.downbeatTime;
 
-  private startMetronome(bpm: number) {
-    this.stopMetronome();
+      // capture le niveau d'entrée pour la waveform live (après le temps 1)
+      if (elapsed >= 0 && this.analyser) {
+        this.analyser.getFloatTimeDomainData(this.meterBuf);
+        let peak = 0;
+        for (let i = 0; i < this.meterBuf.length; i++) {
+          const a = Math.abs(this.meterBuf[i]);
+          if (a > peak) peak = a;
+        }
+        this.livePeaks.push({ t: elapsed, v: peak });
+      }
 
-    this.metroBpm = bpm;
-    if (!this.metroCtx) {
-      this.metroCtx = new AudioContext();
-    }
-
-    const intervalMs = (60 / this.metroBpm) * 1000;
-
-    this.metroIntervalId = window.setInterval(() => {
-      if (!this.metroCtx) return;
-
-      const t0 = this.metroCtx.currentTime;
-      const osc = this.metroCtx.createOscillator();
-      const gain = this.metroCtx.createGain();
-
-      osc.frequency.value = 1000;
-      gain.gain.setValueAtTime(0.9, t0);
-      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
-
-      osc.connect(gain).connect(this.metroCtx.destination);
-      osc.start(t0);
-      osc.stop(t0 + 0.1);
-    }, intervalMs);
+      this.emit("tick", elapsed);
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
   }
-
-  private stopMetronome() {
-    if (this.metroIntervalId !== null) {
-      clearInterval(this.metroIntervalId);
-      this.metroIntervalId = null;
+  private stopRecTick() {
+    if (this.raf !== null) {
+      cancelAnimationFrame(this.raf);
+      this.raf = null;
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // BLOB / URL
-  // ─────────────────────────────────────────────────────────────
-
-  private setBlob(blob: Blob) {
-    if (this.audioURL) {
-      URL.revokeObjectURL(this.audioURL);
-    }
-
-    this.blob = blob;
-    this.audioURL = URL.createObjectURL(blob);
-
-    // reset trim dans un premier temps, waveform recalculera duration
-    this.duration = 0;
-    this.trimStart = 0;
-    this.trimEnd = 0;
-
-    if (this.waveform) {
-      this.waveform.load(this.audioURL);
-    }
-    this.ensureAudioElement();
-  }
-
-  private ensureAudioElement() {
-    if (!this.audioURL) return;
-    if (!this.audioEl) {
-      this.audioEl = new Audio(this.audioURL);
-      this.audioEl.loop = false;
-    } else {
-      this.audioEl.src = this.audioURL;
-    }
-  }
-
-  getBlob(): Blob | null {
-    return this.blob;
-  }
-
-  getDuration(): number {
-    return this.duration;
-  }
-
-  getTrim() {
-    return { start: this.trimStart, end: this.trimEnd };
+  getLivePeaks(): LivePeak[] {
+    return this.livePeaks;
   }
 
   // ─────────────────────────────────────────────────────────────
   // TRIM
   // ─────────────────────────────────────────────────────────────
-
   setTrim(start: number, end: number) {
     this.trimStart = Math.max(0, start);
     this.trimEnd = Math.max(this.trimStart, end);
     this.emit("trim-change", this.trimStart, this.trimEnd);
   }
+  getTrim() {
+    return { start: this.trimStart, end: this.trimEnd };
+  }
+  getHeadTrim() {
+    return this.headTrim;
+  }
+  getAlignedDuration() {
+    return this.alignedDuration;
+  }
 
   // ─────────────────────────────────────────────────────────────
-  // PLAYBACK
+  // TRAITEMENT (trim + gain + normalize) -> buffer (lane/preview) & WAV
   // ─────────────────────────────────────────────────────────────
+  buildProcessedTake(opts: { gain?: number; normalize?: boolean }): ProcessedTake | null {
+    if (!this.alignedSamples) return null;
+    const sr = this.alignedSR;
 
-  play() {
-    if (!this.audioURL) return;
-    this.ensureAudioElement();
-    if (!this.audioEl) return;
+    const mono = sliceMono(this.alignedSamples, sr, this.trimStart, this.trimEnd);
+    applyGain(mono, opts.gain ?? 1);
+    if (opts.normalize) normalize(mono);
+    hardClip(mono);
 
-    this.stopPlayback(); // reset tick loop
-    this.audioEl.currentTime = this.trimStart;
-    this.audioEl.play().catch(() => {});
-    this.emit("play");
-    this.startTickLoop();
+    const buffer = this.ctx.createBuffer(1, Math.max(1, mono.length), sr);
+    buffer.copyToChannel(mono, 0);
+
+    return { buffer, samples: mono, sampleRate: sr };
   }
 
-  stop() {
-    this.stopPlayback();
-    this.emit("stop");
+  encodeWav(take: ProcessedTake): Blob {
+    return encodeWavMono(take.samples, take.sampleRate);
   }
 
-  private stopPlayback() {
-    if (this.audioEl) {
-      this.audioEl.pause();
-      this.audioEl.currentTime = 0;
-    }
-    this.stopTickLoop();
+  getBlob() {
+    return this.blob;
+  }
+  hasRecording() {
+    return this.alignedSamples !== null;
   }
 
-  private cleanupAudioGraph() {
-    // plus d’AudioContext ici, juste l’élément audio
-    if (this.audioEl) {
-      this.audioEl.pause();
-      this.audioEl = null;
-    }
-    this.stopTickLoop();
-  }
-
+  // ─────────────────────────────────────────────────────────────
+  // CLEANUP
+  // ─────────────────────────────────────────────────────────────
   private cleanupWaveform() {
     if (this.waveform) {
-      this.waveform.destroy();
+      try {
+        this.waveform.destroy();
+      } catch {}
       this.waveform = null;
     }
     this.regions = null;
-    this.waveformContainer = null;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // TICK LOOP
-  // ─────────────────────────────────────────────────────────────
-
-  private startTickLoop() {
-    this.stopTickLoop();
-
-    const tick = () => {
-      if (!this.audioEl) return;
-      const t = this.audioEl.currentTime;
-      this.emit("tick", t);
-
-      if (this.audioEl.ended || t >= this.trimEnd) {
-        this.emit("stop");
-        this.stopTickLoop();
-        return;
-      }
-
-      this.raf = requestAnimationFrame(tick);
-    };
-
-    this.raf = requestAnimationFrame(tick);
-  }
-
-  private stopTickLoop() {
-    if (this.raf !== null) {
-      cancelAnimationFrame(this.raf);
-      this.raf = null;
+  destroy() {
+    this.metro.stop();
+    this.stopRecTick();
+    this.cleanupRecorder();
+    this.cleanupWaveform();
+    if (this.audioURL) {
+      URL.revokeObjectURL(this.audioURL);
+      this.audioURL = null;
     }
+    this.listeners = {
+      ready: [],
+      "record-start": [],
+      "record-stop": [],
+      tick: [],
+      "trim-change": [],
+    };
   }
 }

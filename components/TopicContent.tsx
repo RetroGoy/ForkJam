@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import toast from "react-hot-toast";
 import { NodeGraph } from "@/components/graph/NodeGraph";
 import { RecorderModal } from "@/components/recorder/RecorderModal";
 import { BranchTimelinePlayer } from "@/components/audio/ui/BranchTimelinePlayer";
-import type { Node } from "@/lib/supabase/supabase";
+import {
+  supabase,
+  getVotesForNodes,
+  toggleNodeVote,
+  type Node,
+} from "@/lib/supabase/supabase";
 import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
 import { getBranchFrom } from "@/lib/utils/getBranchFrom";
+
+type VoteValue = 1 | -1 | 0;
 
 const SIDEBAR_WIDTH = 260;
 
@@ -29,6 +37,11 @@ export function TopicContent({
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [recorderParentId, setRecorderParentId] = useState<string | null>(null);
   const [recorderBranch, setRecorderBranch] = useState<BranchNode[]>([]);
+  const [recorderParentNodes, setRecorderParentNodes] = useState<Node[]>([]);
+
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [userVotes, setUserVotes] = useState<Record<string, VoteValue>>({});
+  const [userId, setUserId] = useState<string | null>(null);
 
   const audio = useAudioEngine();
 
@@ -36,6 +49,59 @@ export function TopicContent({
     audio.init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Somme des votes de tous les nodes du topic = note de la carte topic.
+  const aggregate = useMemo(
+    () => Object.values(scores).reduce((a, b) => a + b, 0),
+    [scores]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+      setUserId(user?.id ?? null);
+
+      const votes = await getVotesForNodes(nodes.map((n) => n.id));
+      if (cancelled) return;
+
+      const s: Record<string, number> = {};
+      const uv: Record<string, VoteValue> = {};
+      for (const v of votes) {
+        s[v.target_id] = (s[v.target_id] ?? 0) + v.value;
+        if (user && v.user_id === user.id) uv[v.target_id] = v.value as VoteValue;
+      }
+      setScores(s);
+      setUserVotes(uv);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [nodes]);
+
+  const handleVote = async (nodeId: string, value: 1 | -1) => {
+    if (!userId) {
+      toast.error("Connecte-toi pour voter");
+      return;
+    }
+
+    const prevVote = userVotes[nodeId] ?? 0;
+    const nextVote: VoteValue = prevVote === value ? 0 : value;
+    const delta = nextVote - prevVote;
+
+    setUserVotes((p) => ({ ...p, [nodeId]: nextVote }));
+    setScores((p) => ({ ...p, [nodeId]: (p[nodeId] ?? 0) + delta }));
+
+    const ok = await toggleNodeVote(nodeId, value);
+    if (!ok) {
+      setUserVotes((p) => ({ ...p, [nodeId]: prevVote }));
+      setScores((p) => ({ ...p, [nodeId]: (p[nodeId] ?? 0) - delta }));
+      toast.error("Vote non enregistré");
+    }
+  };
 
   const refreshNodes = async () => {
     setLoading(true);
@@ -60,6 +126,11 @@ export function TopicContent({
       audio_url: n.audio_url,
     }));
     setRecorderBranch(branch);
+
+    const fullParents = branch
+      .map((b) => nodes.find((n) => n.id === b.id))
+      .filter((n): n is Node => !!n);
+    setRecorderParentNodes(fullParents);
 
     setRecorderOpen(true);
   };
@@ -109,6 +180,10 @@ return (
     onNodeSelect={handleNodeSelect}
     onAddChild={handleAddChild}
     selectedNodeId={selectedNode?.id ?? null}
+    scores={scores}
+    aggregate={aggregate}
+    userVotes={userVotes}
+    onVote={handleVote}
   />
   </div>
 
@@ -136,6 +211,7 @@ return (
           bpm={rootNode.bpm ?? 120}
           onCreated={handleCreated}
           branch={recorderBranch}
+          parentNodes={recorderParentNodes}
         />
       </div>
   );

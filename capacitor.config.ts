@@ -17,15 +17,12 @@ const config: CapacitorConfig = {
   backgroundColor: '#121417', // charbon derrière la webview (safe areas) -> plus de bandes blanches
 
   server: {
-    // SIMULATEUR iOS : localhost = contexte sécurisé -> getUserMedia (micro) OK,
-    // et le simulateur partage le loopback du Mac. Requiert `npm run dev` (-p 3000).
-    //
-    // TÉLÉPHONE PHYSIQUE : localhost = le tel lui-même. Il faudrait l'IP LAN du Mac
-    // (ex. http://192.168.1.7:3000, même Wi-Fi) MAIS l'IP en http n'est PAS un
-    // contexte sécurisé -> le micro serait bloqué. Pour un vrai device : déployer
-    // en https (Vercel) et mettre server.url = https://<ton-domaine>.
-    url: 'http://localhost:3000',
-    cleartext: true,
+    // App déployée en HTTPS -> contexte sécurisé (getUserMedia/micro OK) et
+    // joignable partout (Wi-Fi + cellulaire), sur simulateur ET iPhone physique.
+    // Pour développer en local : remplacer temporairement par
+    //   url: 'http://localhost:3000', cleartext: true
+    // (et remettre l'exception ATS DEV dans Info.plist).
+    url: 'https://forkjam.app',
   },
 
   ios: {

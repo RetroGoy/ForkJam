@@ -54,17 +54,17 @@ export function ModalProvider({ children }: { children: ReactNode }) {
 
       {/* MODAL */}
       {type && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none rounded-xl">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
           <div
               className="
-                relative bg-black/90 border border-border rounded-xl shadow-xl w-full max-w-md pointer-events-auto
+                relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-black/90 shadow-xl pointer-events-auto
                 animate-in fade-in-0 zoom-in-95 duration-200
               "
               onClick={(e) => e.stopPropagation()}
             >
             <button
               onClick={close}
-              className="absolute top-2 right-2 text-gray-700 hover:text-gray-500"
+              className="absolute right-3 top-2.5 z-10 text-black/60 transition hover:text-black"
             >
               <X size={18} />
             </button>

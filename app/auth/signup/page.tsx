@@ -69,15 +69,15 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-black/60 shadow-[0_0_40px_rgba(0,0,0,0.7)] overflow-hidden relative">
+    <div className="min-h-screen bg-background bg-dot-pattern flex items-center justify-center p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-xl">
         {/* Bandeau titre style "fenêtre OS" */}
-        <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-yellow-700 to-yellow-500">
+        <div className="relative flex items-center justify-center bg-yellow-400 px-4 py-2.5">
           <Link href="/" className="absolute left-3 top-1/2 -translate-y-1/2">
-            <span className="text-black text-lg font-bold hover:opacity-70">←</span>
+            <span className="text-lg font-bold text-black transition hover:opacity-70">←</span>
           </Link>
-          <span className="text-xs font-black tracking-[0.25em] text-black uppercase">
-            CREATE ACCOUNT
+          <span className="text-xs font-black uppercase tracking-[0.25em] text-black">
+            Créer un compte
           </span>
         </div>
 
@@ -86,11 +86,11 @@ export default function SignUpPage() {
           <form className="space-y-4" onSubmit={handleSignUp}>
             {/* Username */}
             <div className="space-y-1">
-              <label className="text-gray-300 text-xs uppercase tracking-wide">
+              <label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Username
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   required
                   type="text"
@@ -99,18 +99,18 @@ export default function SignUpPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, username: e.target.value }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-3 text-sm text-foreground outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/60"
                 />
               </div>
             </div>
 
             {/* Email */}
             <div className="space-y-1">
-              <label className="text-gray-300 text-xs uppercase tracking-wide">
+              <label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   required
                   type="email"
@@ -119,18 +119,18 @@ export default function SignUpPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, email: e.target.value }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-3 text-sm text-foreground outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/60"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div className="space-y-1">
-              <label className="text-gray-300 text-xs uppercase tracking-wide">
+              <label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   required
                   type="password"
@@ -139,18 +139,18 @@ export default function SignUpPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, password: e.target.value }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-3 text-sm text-foreground outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/60"
                 />
               </div>
             </div>
 
             {/* Department */}
             <div className="space-y-1">
-              <label className="text-gray-300 text-xs uppercase tracking-wide">
+              <label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Department (FR)
               </label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   required
                   type="text"
@@ -166,17 +166,17 @@ export default function SignUpPage() {
                         .slice(0, 2),                // ← limite à 2 chiffres
                     }))
                   }
-                  className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 rounded-md text-foreground text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-3 text-sm text-foreground outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/60"
                 />
               </div>
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px] text-muted-foreground">
                 Used to surface topics from your area first (e.g. 69, 75, 33…)
               </p>
             </div>
 
             {/* Errors */}
             {error && (
-              <p className="text-red-400 text-xs bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2 mt-2">
+              <p className="mt-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
                 {error}
               </p>
             )}
@@ -184,22 +184,22 @@ export default function SignUpPage() {
             {/* Submit */}
             <button
               disabled={loading}
-              className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-semibold py-2 rounded-md flex items-center justify-center gap-2 transition disabled:bg-yellow-900 disabled:text-gray-400 mt-2"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-yellow-400 py-2.5 font-bold text-black shadow-sm transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" /> Creating…
+                  <Loader2 size={18} className="animate-spin" /> Création…
                 </>
               ) : (
-                "Create account"
+                "Créer un compte"
               )}
             </button>
           </form>
 
-          <p className="text-gray-400 text-center mt-4 text-xs">
-            Already connected to the grid?{" "}
-            <Link href="/auth/signin" className="text-yellow-400 underline">
-              Sign in
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Déjà un compte ?{" "}
+            <Link href="/auth/signin" className="font-semibold text-yellow-400 hover:text-yellow-300">
+              Se connecter
             </Link>
           </p>
         </div>

@@ -824,7 +824,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                 <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
                   Trim
                 </span>
-                <div className="h-12 w-full overflow-hidden rounded-lg border border-white/10 bg-black/30 px-1">
+                <div className="h-12 w-full overflow-hidden rounded-xl border border-white/10 bg-black/30 px-1">
                   <div
                     ref={waveformRef}
                     className="h-full w-full"
@@ -869,7 +869,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
               <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
                 Égaliseur
               </span>
-              <div className="mt-1 flex-1 overflow-hidden rounded-lg border border-white/10 bg-black/30">
+              <div className="mt-1 flex-1 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                 <EqCurve
                   low={eqLow}
                   mid={eqMid}

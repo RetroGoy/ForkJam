@@ -14,10 +14,10 @@ export default function ContactPage() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Contact
         </h1>
-        <p className="text-sm text-neutral-300 sm:text-base">
+        <p className="text-sm text-muted-foreground sm:text-base">
           Vous pouvez me contacter ici :
         </p>
-        <p className="text-sm font-mono text-yellow-300 sm:text-base">
+        <p className="font-mono text-sm text-yellow-300 sm:text-base">
           n.naveau@icloud.com - 06.01.82.60.94
         </p>
       </section>

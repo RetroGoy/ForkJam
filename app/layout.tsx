@@ -1,5 +1,5 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "next-themes";
@@ -12,14 +12,38 @@ import { cookies } from "next/headers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-   title: 'ForkJam — Collaborative Music Platform',
+  title: "ForkJam — Collaborative Music Platform",
   description:
-    'ForkJam est une plateforme musicale collaborative où chaque idée devient un nœud dans un graphe musical interactif.',
-  icons: {
-    icon: '/icons/favicon.ico',   
-    shortcut: '/icons/favicon.ico',  
-  },
+    "ForkJam est une plateforme musicale collaborative où chaque idée devient un nœud dans un graphe musical interactif.",
   metadataBase: new URL("https://forkjam.app"),
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/favicon.ico",
+    shortcut: "/icons/favicon.ico",
+    apple: "/icons/ios_180.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "ForkJam",
+    statusBarStyle: "black-translucent",
+  },
+  openGraph: {
+    title: "ForkJam",
+    description: "Collaborative musical node graph.",
+    url: "/",
+    type: "website",
+    images: [{ url: "/og-image.png", width: 512, height: 512 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ForkJam",
+    description: "Collaborative musical node graph.",
+    images: ["/logoFj.png"],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#FFDD4A",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

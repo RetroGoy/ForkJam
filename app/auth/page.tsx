@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/supabase';
 import { Mail, Lock, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -74,24 +73,24 @@ export default function AuthPage() {
 };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background bg-dot-pattern flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-yellow-500 tracking-widest mb-2">DRUIDE 500</h1>
-          <p className="text-gray-400">Sign in to collaborate on musical projects</p>
+          <h1 className="mb-2 text-4xl font-extrabold tracking-tight text-yellow-400 drop-shadow-lg">FORKJAM</h1>
+          <p className="text-muted-foreground">Connectez-vous pour collaborer sur vos projets musicaux</p>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 shadow-xl border border-yellow-900/30">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-xl">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+              <label className="mb-1 block text-sm font-medium text-muted-foreground">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-500 text-foreground"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-3 text-foreground outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/60"
                   placeholder="your@email.com"
                   required
                 />
@@ -99,14 +98,14 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
+              <label className="mb-1 block text-sm font-medium text-muted-foreground">Mot de passe</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-500 text-foreground"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-3 text-foreground outline-none transition focus:border-yellow-400/60 focus:ring-1 focus:ring-yellow-400/60"
                   placeholder="••••••••"
                   required
                 />
@@ -114,22 +113,22 @@ export default function AuthPage() {
             </div>
 
             {error && (
-              <div className="text-red-400 text-sm py-2">{error}</div>
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</div>
             )}
 
             <div className="space-y-2">
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-yellow-700 hover:bg-yellow-600 text-white py-2 px-4 rounded-md transition-colors disabled:bg-yellow-900 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-yellow-400 px-4 py-2.5 font-bold text-black shadow-sm transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isLoading ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    <span>Processing...</span>
+                    <span>Traitement…</span>
                   </>
                 ) : (
-                  <span>Sign In</span>
+                  <span>Se connecter</span>
                 )}
               </button>
 
@@ -137,9 +136,9 @@ export default function AuthPage() {
                 type="button"
                 onClick={handleSignUp}
                 disabled={isLoading}
-                className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 py-2 px-4 rounded-md transition-colors disabled:bg-gray-800 disabled:cursor-not-allowed"
+                className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-foreground/80 transition hover:bg-white/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Create Account
+                Créer un compte
               </button>
             </div>
           </form>

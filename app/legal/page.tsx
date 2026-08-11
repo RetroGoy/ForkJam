@@ -14,7 +14,7 @@ export default function LegalPage() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Mentions légales
         </h1>
-        <div className="space-y-2 text-sm text-neutral-300 sm:text-base">
+        <div className="space-y-2 text-sm text-muted-foreground sm:text-base">
           <p>
             <span className="font-semibold">Éditeur :</span> ForkJam
           </p>

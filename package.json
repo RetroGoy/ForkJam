@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -16,6 +16,7 @@
   "dependencies": {
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
+    "@capacitor/ios": "^7.6.8",
     "@ffmpeg/ffmpeg": "^0.11.6",
     "@radix-ui/react-slot": "^1.2.0",
     "@sentry/nextjs": "^10.29.0",

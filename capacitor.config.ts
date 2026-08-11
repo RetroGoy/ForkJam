@@ -14,6 +14,7 @@ const config: CapacitorConfig = {
   appId: 'com.forkjam.app',
   appName: 'ForkJam',
   webDir: 'capacitor-shell', // placeholder ; le contenu réel vient de server.url
+  backgroundColor: '#121417', // charbon derrière la webview (safe areas) -> plus de bandes blanches
 
   server: {
     // SIMULATEUR iOS : localhost = contexte sécurisé -> getUserMedia (micro) OK,

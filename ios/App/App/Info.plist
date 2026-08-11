@@ -44,7 +44,11 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
+	<false/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleLightContent</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ForkJam a besoin du micro pour enregistrer tes pistes audio.</string>
 	<key>NSLocalNetworkUsageDescription</key>

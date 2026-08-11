@@ -13,7 +13,8 @@ export default function AvatarUploader({ user, onUpload }: any) {
       if (!file) return;
 
       const fileExt = file.name.split(".").pop();
-      const filePath = `${user.id}.${fileExt}`;
+      // L'uid doit être le 1er segment du chemin (policy RLS storage avatars).
+      const filePath = `${user.id}/avatar.${fileExt}`;
 
       // Upload
       const { error: uploadError } = await supabase.storage
@@ -22,12 +23,12 @@ export default function AvatarUploader({ user, onUpload }: any) {
 
       if (uploadError) throw uploadError;
 
-      // Retrieve public (signed) URL
+      // Retrieve public URL (cache-busting pour voir la nouvelle image)
       const { data: urlData } = await supabase.storage
         .from("avatars")
         .getPublicUrl(filePath);
 
-      const avatarUrl = urlData.publicUrl;
+      const avatarUrl = `${urlData.publicUrl}?v=${Date.now()}`;
 
       // Save in DB
       await supabase

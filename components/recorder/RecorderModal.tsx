@@ -535,9 +535,15 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
         user_id: user.id,
       };
 
-      const newNode = await createNode(payload);
-      if (!newNode) {
-        toast.error("Erreur lors de la création du node");
+      const { data: newNode, error: createErr } = await createNode(payload);
+      if (createErr || !newNode) {
+        // 42501 = row-level security : la seule policy INSERT sur nodes vérifie
+        // ownership + quota mensuel, donc pour un user connecté = quota atteint.
+        toast.error(
+          createErr?.code === "42501"
+            ? "Limite de nœuds atteinte pour ce mois-ci. Réessaie le mois prochain."
+            : "Erreur lors de la création du node"
+        );
         setIsSaving(false);
         return;
       }

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type PostgrestError } from "@supabase/supabase-js";
 
 export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,7 +72,9 @@ export type Vote = {
 
 // CREATE NODE (ROOT OR CHILD)
 
-export async function createNode(payload: Partial<Node>) {
+export async function createNode(
+  payload: Partial<Node>
+): Promise<{ data: Node | null; error: PostgrestError | null }> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -120,10 +122,10 @@ export async function createNode(payload: Partial<Node>) {
 
   if (error) {
     console.error("Error creating node:", error);
-    return null;
+    return { data: null, error };
   }
 
-  return data as Node;
+  return { data: data as Node, error: null };
 }
 
 // FETCH ROOT NODES

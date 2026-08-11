@@ -16,9 +16,14 @@ const config: CapacitorConfig = {
   webDir: 'capacitor-shell', // placeholder ; le contenu réel vient de server.url
 
   server: {
-    // IP LAN du Mac + port fixe du `npm run dev` (voir script dev = next dev -p 3000).
-    // Le tel/simulateur doit être sur le même réseau Wi-Fi.
-    url: 'http://192.168.1.7:3000',
+    // SIMULATEUR iOS : localhost = contexte sécurisé -> getUserMedia (micro) OK,
+    // et le simulateur partage le loopback du Mac. Requiert `npm run dev` (-p 3000).
+    //
+    // TÉLÉPHONE PHYSIQUE : localhost = le tel lui-même. Il faudrait l'IP LAN du Mac
+    // (ex. http://192.168.1.7:3000, même Wi-Fi) MAIS l'IP en http n'est PAS un
+    // contexte sécurisé -> le micro serait bloqué. Pour un vrai device : déployer
+    // en https (Vercel) et mettre server.url = https://<ton-domaine>.
+    url: 'http://localhost:3000',
     cleartext: true,
   },
 

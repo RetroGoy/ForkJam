@@ -45,5 +45,18 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ForkJam a besoin du micro pour enregistrer tes pistes audio.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>ForkJam se connecte au serveur de développement sur ton réseau local.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- DEV uniquement : autorise le HTTP vers le serveur Next en LAN.
+		     En PROD, pointer server.url vers https://… et SUPPRIMER ce bloc. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

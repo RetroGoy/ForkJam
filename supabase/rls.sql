@@ -19,11 +19,15 @@
 
 
 -- ----------------------------------------------------------------------------
--- 1. NODES — INSERT : fusionner ownership + quota en UNE policy
+-- 1. NODES — INSERT : ownership + quota MENSUEL en UNE policy
 -- ----------------------------------------------------------------------------
--- Avant : 2 policies permissives OU-ées => chacune annulait l'autre.
--- Après : une seule => il faut être le propriétaire ET sous quota (ou admin).
--- L'expression de quota est reprise VERBATIM de l'ancienne "limit nodes by role".
+-- Avant : 2 policies permissives OU-ées => chacune annulait l'autre
+--         (usurpation d'auteur + quota contournable).
+-- Après : une seule => propriétaire ET sous quota du mois en cours (ou admin).
+--
+-- Le quota est MENSUEL : on ne compte que les nodes créés depuis le 1er du mois
+-- (date_trunc('month', now())). plans.max_nodes est donc désormais interprété
+-- comme un plafond PAR MOIS (mettre 10 pour le plan basique — voir étape SQL).
 
 drop policy if exists "allow insert nodes for owner" on public.nodes;
 drop policy if exists "limit nodes by role" on public.nodes;
@@ -35,7 +39,10 @@ create policy "nodes_insert_owner_within_quota"
     auth.uid() = user_id
     and (
       (
-        (select count(*) from public.nodes n where n.user_id = auth.uid())
+        (select count(*)
+           from public.nodes n
+          where n.user_id = auth.uid()
+            and n.created_at >= date_trunc('month', now()))
         <
         (select p.max_nodes
            from public.users u

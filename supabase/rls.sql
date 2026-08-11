@@ -31,6 +31,7 @@
 
 drop policy if exists "allow insert nodes for owner" on public.nodes;
 drop policy if exists "limit nodes by role" on public.nodes;
+drop policy if exists "nodes_insert_owner_within_quota" on public.nodes;
 
 create policy "nodes_insert_owner_within_quota"
   on public.nodes for insert
@@ -91,6 +92,7 @@ drop policy if exists "Users can delete their own votes" on public.votes;
 -- On recrée l'INSERT au même format et on AJOUTE l'UPDATE (manquant) pour upsert:true.
 
 drop policy if exists "User uploads his avatar" on storage.objects;
+drop policy if exists "avatars_insert_own" on storage.objects;
 create policy "avatars_insert_own"
   on storage.objects for insert
   to authenticated

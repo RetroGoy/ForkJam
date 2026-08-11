@@ -1,7 +1,3 @@
-// lib/utils/instrumentColor.ts
-// Couleur de waveform selon l'instrument — harmonie commune au recorder
-// et au player de branche.
-
 export function getWaveColorForInstrument(instr?: string | null): string {
   const val = (instr ?? "").toLowerCase();
   if (!val) return "#a855f7"; // purple-500 (défaut)

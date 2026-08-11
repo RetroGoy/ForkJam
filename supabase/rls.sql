@@ -1,189 +1,95 @@
 -- ============================================================================
--- ForkJam — Row Level Security (RLS) & policies
+-- ForkJam — Migration corrective RLS
 -- ============================================================================
--- PROPOSITION à RELIRE avant application. Reconstruit à partir de l'usage réel
--- du code (lib/supabase/*, app/**, components/**), PAS d'un dump du schéma.
+-- Basé sur l'ÉTAT RÉEL de la base (inspecté via pg_policies / pg_constraint,
+-- août 2026), pas sur des hypothèses.
 --
--- ⚠️  AVANT DE LANCER :
---   1. Vérifie que les noms de tables/colonnes ci-dessous correspondent à ta base
---      (surtout users.avatar_url, votes.target_type/target_id, nodes.user_id).
---   2. Lance d'abord sur une base de staging ou fais un backup.
---   3. Exécute dans Supabase → SQL Editor. Le script est idempotent
---      (DROP POLICY IF EXISTS avant chaque CREATE), donc rejouable.
+-- Constat : RLS déjà activée sur users/nodes/votes, users en own-row, votes
+-- avec PK (user_id,target_type,target_id) + CHECK value in (-1,1), bucket
+-- recordings public. => On NE recrée PAS ces éléments.
 --
--- MODÈLE D'ACCÈS (déduit du code) :
---   • nodes  : contenu PUBLIC (la landing lit les nodes sans être connecté)
---   • votes  : PUBLIC en lecture (scores affichés à tous), écriture = son vote
---   • users  : PRIVÉ (email sensible) — chacun ne lit/écrit que SA ligne
---   • storage recordings/avatars : lecture publique (getPublicUrl), upload connecté
+-- Cette migration fait 3 choses :
+--   1. CORRIGE la faille d'INSERT sur nodes (usurpation d'auteur + quota bypass)
+--   2. SUPPRIME les policies dupliquées (users, nodes, votes)
+--   3. RÉPARE le storage avatars (policies INSERT/UPDATE alignées sur le chemin)
+--
+-- ⚠️  Relire, tester en staging / faire un backup, puis exécuter dans
+--     Supabase → SQL Editor. Idempotent (drop-if-exists avant create).
 -- ============================================================================
 
 
 -- ----------------------------------------------------------------------------
--- 0. Auto-création de la ligne public.users à l'inscription (trigger)
+-- 1. NODES — INSERT : fusionner ownership + quota en UNE policy
 -- ----------------------------------------------------------------------------
--- Remplace l'INSERT client-side actuel (app/auth/*, SignUpModal) qui échoue
--- quand la confirmation e-mail est active (pas de session au moment de l'insert).
--- Le trigger tourne en SECURITY DEFINER : fiable, indépendant des policies.
+-- Avant : 2 policies permissives OU-ées => chacune annulait l'autre.
+-- Après : une seule => il faut être le propriétaire ET sous quota (ou admin).
+-- L'expression de quota est reprise VERBATIM de l'ancienne "limit nodes by role".
 
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.users (id, email, username, department)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)),
-    nullif(new.raw_user_meta_data->>'department', '')
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
+drop policy if exists "allow insert nodes for owner" on public.nodes;
+drop policy if exists "limit nodes by role" on public.nodes;
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
-
-
--- ----------------------------------------------------------------------------
--- 1. USERS  (privé : chacun sa ligne)
--- ----------------------------------------------------------------------------
-alter table public.users enable row level security;
-
-drop policy if exists "users_select_own" on public.users;
-create policy "users_select_own"
-  on public.users for select
-  using (auth.uid() = id);
-
--- Fallback si tu gardes l'insert client (le trigger ci-dessus le couvre déjà) :
-drop policy if exists "users_insert_self" on public.users;
-create policy "users_insert_self"
-  on public.users for insert
-  with check (auth.uid() = id);
-
-drop policy if exists "users_update_own" on public.users;
-create policy "users_update_own"
-  on public.users for update
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
-
--- Pas de DELETE côté client → aucune policy delete (donc interdit).
-
-
--- ----------------------------------------------------------------------------
--- 2. NODES  (contenu public, écriture par le créateur)
--- ----------------------------------------------------------------------------
-alter table public.nodes enable row level security;
-
--- Lecture publique (anon inclus) : landing / explore / feed / page graphe.
-drop policy if exists "nodes_select_public" on public.nodes;
-create policy "nodes_select_public"
-  on public.nodes for select
-  using (true);
-
--- Création : utilisateur connecté, uniquement en son nom.
-drop policy if exists "nodes_insert_own" on public.nodes;
-create policy "nodes_insert_own"
+create policy "nodes_insert_owner_within_quota"
   on public.nodes for insert
   to authenticated
-  with check (auth.uid() = user_id);
-
--- Édition / suppression par le propriétaire (pas encore utilisé côté app,
--- mais cohérent et sans risque — décommente si tu veux les activer).
-drop policy if exists "nodes_update_own" on public.nodes;
-create policy "nodes_update_own"
-  on public.nodes for update
-  to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-drop policy if exists "nodes_delete_own" on public.nodes;
-create policy "nodes_delete_own"
-  on public.nodes for delete
-  to authenticated
-  using (auth.uid() = user_id);
-
-
--- ----------------------------------------------------------------------------
--- 3. VOTES  (lecture publique pour les scores, écriture = son propre vote)
--- ----------------------------------------------------------------------------
-alter table public.votes enable row level security;
-
--- Un seul vote par (user, cible). Empêche les doublons que le code suppose déjà.
--- (Ignore l'erreur si la contrainte existe déjà.)
-do $$
-begin
-  alter table public.votes
-    add constraint votes_user_target_unique
-    unique (user_id, target_type, target_id);
-exception when duplicate_table or duplicate_object then null;
-end $$;
-
-drop policy if exists "votes_select_public" on public.votes;
-create policy "votes_select_public"
-  on public.votes for select
-  using (true);
-
-drop policy if exists "votes_insert_own" on public.votes;
-create policy "votes_insert_own"
-  on public.votes for insert
-  to authenticated
-  with check (auth.uid() = user_id);
-
-drop policy if exists "votes_update_own" on public.votes;
-create policy "votes_update_own"
-  on public.votes for update
-  to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-drop policy if exists "votes_delete_own" on public.votes;
-create policy "votes_delete_own"
-  on public.votes for delete
-  to authenticated
-  using (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and (
+      (
+        (select count(*) from public.nodes n where n.user_id = auth.uid())
+        <
+        (select p.max_nodes
+           from public.users u
+           join public.plans p on p.role = u.role
+          where u.id = auth.uid())
+      )
+      or
+      (
+        (select users.role from public.users where users.id = auth.uid()) = 'admin'
+      )
+    )
+  );
 
 
 -- ----------------------------------------------------------------------------
--- 4. STORAGE  (buckets "recordings" et "avatars")
+-- 2. NODES — SELECT : garder une seule policy de lecture publique
 -- ----------------------------------------------------------------------------
--- Les deux buckets doivent être PUBLICS en lecture (le code utilise getPublicUrl).
--- À faire une fois dans Supabase → Storage → bucket → "Public bucket" = ON,
--- OU via les policies de lecture ci-dessous.
+-- "Everyone can read nodes" (public, true) couvre déjà les authenticated.
+drop policy if exists "Allow read for Authenticated users" on public.nodes;
+-- on garde "Everyone can read nodes"
 
--- Lecture publique.
-drop policy if exists "recordings_read_public" on storage.objects;
-create policy "recordings_read_public"
-  on storage.objects for select
-  using (bucket_id = 'recordings');
 
-drop policy if exists "avatars_read_public" on storage.objects;
-create policy "avatars_read_public"
-  on storage.objects for select
-  using (bucket_id = 'avatars');
+-- ----------------------------------------------------------------------------
+-- 3. USERS — retirer les doublons (on garde le jeu users_*)
+-- ----------------------------------------------------------------------------
+drop policy if exists "Users can read themselves"   on public.users;
+drop policy if exists "Users can insert themselves" on public.users;
+drop policy if exists "Users can update themselves" on public.users;
+-- restent : users_select_own / users_insert_own / users_update_own
 
--- Upload d'un enregistrement : utilisateur connecté.
-drop policy if exists "recordings_insert_auth" on storage.objects;
-create policy "recordings_insert_auth"
-  on storage.objects for insert
-  to authenticated
-  with check (bucket_id = 'recordings');
 
--- Avatar : upload/maj par le propriétaire uniquement.
--- avatarUploader écrit `${user.id}.${ext}` à la racine du bucket → on vérifie le préfixe.
-drop policy if exists "avatars_insert_own" on storage.objects;
+-- ----------------------------------------------------------------------------
+-- 4. VOTES — retirer les doublons (on garde le jeu votes_*)
+-- ----------------------------------------------------------------------------
+drop policy if exists "Users can insert their own votes" on public.votes;
+drop policy if exists "Users can update their own votes" on public.votes;
+drop policy if exists "Users can delete their own votes" on public.votes;
+-- restent : "Votes are viewable by everyone" + votes_insert_own / _update_own / _delete_own
+
+
+-- ----------------------------------------------------------------------------
+-- 5. STORAGE avatars — réparer INSERT + ajouter UPDATE (upsert)
+-- ----------------------------------------------------------------------------
+-- La policy actuelle attend l'uid comme 1er segment de chemin : substring(name,'[^/]+').
+-- => le code doit uploader vers `${uid}/avatar.<ext>` (patch dans avatarUploader.tsx).
+-- On recrée l'INSERT au même format et on AJOUTE l'UPDATE (manquant) pour upsert:true.
+
+drop policy if exists "User uploads his avatar" on storage.objects;
 create policy "avatars_insert_own"
   on storage.objects for insert
   to authenticated
   with check (
     bucket_id = 'avatars'
-    and split_part(name, '.', 1) = auth.uid()::text
+    and (auth.uid())::text = substring(name, '[^/]+')
   );
 
 drop policy if exists "avatars_update_own" on storage.objects;
@@ -192,11 +98,37 @@ create policy "avatars_update_own"
   to authenticated
   using (
     bucket_id = 'avatars'
-    and split_part(name, '.', 1) = auth.uid()::text
+    and (auth.uid())::text = substring(name, '[^/]+')
+  )
+  with check (
+    bucket_id = 'avatars'
+    and (auth.uid())::text = substring(name, '[^/]+')
   );
 
+
 -- ============================================================================
--- FIN. Après application, teste : connecté ET déconnecté (anon), que
--- la landing charge bien les nodes/scores, que la création de node marche,
--- et qu'un user ne peut pas lire la ligne users d'un autre.
+-- OPTIONNEL — trigger de création de la ligne public.users à l'inscription.
+-- À activer si tu veux arrêter de dépendre de l'INSERT client (fragile quand
+-- la confirmation e-mail est active). Une fois en place, on retirera les
+-- inserts client dans app/auth/* et SignUpModal, et la policy users_insert_own
+-- devient superflue.
+-- ----------------------------------------------------------------------------
+-- create or replace function public.handle_new_user()
+-- returns trigger language plpgsql security definer set search_path = public as $$
+-- begin
+--   insert into public.users (id, email, username, department)
+--   values (
+--     new.id,
+--     new.email,
+--     coalesce(new.raw_user_meta_data->>'username', split_part(new.email,'@',1)),
+--     nullif(new.raw_user_meta_data->>'department','')
+--   )
+--   on conflict (id) do nothing;
+--   return new;
+-- end $$;
+--
+-- drop trigger if exists on_auth_user_created on auth.users;
+-- create trigger on_auth_user_created
+--   after insert on auth.users
+--   for each row execute function public.handle_new_user();
 -- ============================================================================

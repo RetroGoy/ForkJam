@@ -80,7 +80,7 @@ export function Sidebar() {
         />
       </nav>
 
-      <div className="flex flex-col items-center gap-4 py-4">
+      <div className="flex flex-col items-center gap-4 py-12">
         <SidebarIcon
           icon={Settings}
           label="Settings"

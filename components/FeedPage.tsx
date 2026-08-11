@@ -84,7 +84,7 @@ export function FeedPage() {
     );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-10 px-6 py-6">
+    <div className="mx-auto space-y-10 px-10 py-6">
       {/* HEADER */}
       <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <div className="flex items-center gap-4">
@@ -110,13 +110,13 @@ export function FeedPage() {
           <Settings size={18} />
         </button>
       </div>
-
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
       {/* COMMUNAUTÉ */}
       <section className="space-y-3">
         <h2 className="text-lg font-bold">Topics récents de la communauté</h2>
 
         {topics.length > 0 ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {topics.map((t) => {
               const playingThis =
                 audio.isPlaying && audio.branch.some((b) => b.id === t.id);
@@ -158,7 +158,7 @@ export function FeedPage() {
             Vous n&apos;avez pas encore créé de nœuds.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {myNodes.map((n) => {
               const rootId = rootMap[n.id] ?? n.id;
               return (
@@ -185,6 +185,7 @@ export function FeedPage() {
           </button>
         </div>
       </section>
+      </div>
     </div>
   );
 }

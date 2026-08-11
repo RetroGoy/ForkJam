@@ -39,11 +39,9 @@ export function UnifiedLayout({ children }: UnifiedLayoutProps) {
           {isLogged && <BottomBar />}
           {isLogged && <RecorderHost />}
 
-          {!isLogged && (
             <div className="fixed bottom-0 left-0 right-0 z-30">
               <Footer />
             </div>
-          )}
 
         </div>
       </div>

@@ -29,7 +29,7 @@ export function AppHeader() {
               height={24}
               className="opacity-90 md:hidden"
             />
-            <span className="text-sm font-black tracking-[0.2em] text-yellow-400">
+            <span className="text-md font-black tracking-[0.2em] text-yellow-400">
               FORKJAM
             </span>
           </Link>

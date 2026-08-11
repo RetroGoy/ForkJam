@@ -676,7 +676,6 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                 </option>
               ))}
             </select>
-            {isRoot && (
               <select
                 value={genre}
                 onChange={(e) => setGenre(e.target.value)}
@@ -693,7 +692,6 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                   </option>
                 ))}
               </select>
-            )}
           </div>
 
           {/* TOOLBAR : entrée + temps */}

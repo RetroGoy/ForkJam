@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
 import { Loader2, User, Mail, Lock, MapPin } from "lucide-react";
 import { useGlobalModal } from "./GlobalModal";
 
 export function SignUpModal() {
-  const { close, open } = useGlobalModal();
+  const { open } = useGlobalModal();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -15,6 +16,7 @@ export function SignUpModal() {
     department: "",
   });
 
+  const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -28,6 +30,9 @@ export function SignUpModal() {
       if (!formData.department.trim()) {
         throw new Error("Please enter your department");
       }
+      if (!accepted) {
+        throw new Error("Tu dois accepter les conditions d'utilisation.");
+      }
 
       // SIGN UP (username + département stockés dans les métadonnées auth)
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -38,35 +43,29 @@ export function SignUpModal() {
             username: formData.username,
             department: formData.department.trim(),
           },
+          emailRedirectTo:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/auth/callback`
+              : undefined,
         },
       });
       if (signUpError) throw signUpError;
 
-      // FORCE SESSION
-      await supabase.auth.getSession();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setError(""); 
-        setSuccess("Please check your email to confirm your account");
+      // Validation email en pause : signUp renvoie une session -> connecté direct.
+      if (data.session?.user) {
+        await supabase.from("users").insert({
+          id: data.session.user.id,
+          email: formData.email,
+          username: formData.username,
+          department: formData.department,
+        });
+        window.location.href = "/feed";
         return;
       }
 
-      // INSERT PROFILE (LE SEUL)
-      const { error: insertError } = await supabase.from("users").insert({
-        id: user.id,
-        email: formData.email,
-        username: formData.username,
-        department: formData.department,
-      });
-      if (insertError) throw insertError;
-
-      close();
-      open("signin");
-
-      close();
-      open("signin");
+      // Fallback si la confirmation par email est (ré)activée côté Supabase.
+      setError("");
+      setSuccess("Vérifie ta boîte mail pour confirmer ton compte.");
     } catch (err: any) {
       setError(err.message ?? "An unknown error occurred");
     }
@@ -153,6 +152,23 @@ export function SignUpModal() {
               />
             </div>
           </div>
+
+          {/* CGU */}
+          <label className="flex items-center gap-2 text-xs text-gray-300">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="accent-yellow-500"
+            />
+            <span>
+              J&apos;accepte les{" "}
+              <Link href="/legal" className="text-yellow-400 underline">
+                conditions d&apos;utilisation
+              </Link>
+              .
+            </span>
+          </label>
 
           {/* ERRORS */}
           {error && (

@@ -63,21 +63,6 @@ export function normalize(samples: Float32Array, targetPeak = 0.94): number {
   return g;
 }
 
-// Fondu d'entrée / sortie (linéaire), en secondes.
-export function applyFades(
-  samples: Float32Array,
-  sampleRate: number,
-  fadeInSec: number,
-  fadeOutSec: number
-): void {
-  const n = samples.length;
-  const inN = Math.min(n, Math.floor((fadeInSec || 0) * sampleRate));
-  for (let i = 0; i < inN; i++) samples[i] *= i / inN;
-
-  const outN = Math.min(n, Math.floor((fadeOutSec || 0) * sampleRate));
-  for (let i = 0; i < outN; i++) samples[n - 1 - i] *= i / outN;
-}
-
 // Sécurité anti-clip : borne dur à [-1, 1].
 export function hardClip(samples: Float32Array): void {
   for (let i = 0; i < samples.length; i++) {

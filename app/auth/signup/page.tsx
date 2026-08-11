@@ -38,25 +38,29 @@ export default function SignUpPage() {
             username: formData.username,
             department: formData.department.trim(),
           },
+          emailRedirectTo:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/auth/callback`
+              : undefined,
         },
       });
 
       if (signUpError) throw signUpError;
 
-      const user = data.user;
-      if (!user) throw new Error("Unable to create user.");
+      // Validation email en pause : session renvoyée -> connecté direct.
+      if (data.session?.user) {
+        await supabase.from("users").insert({
+          id: data.session.user.id,
+          email: formData.email,
+          username: formData.username,
+          department: formData.department.trim(),
+        });
+        router.push("/feed");
+        return;
+      }
 
-      // 2️⃣ Créer le profil dans public.users (avec département)
-      const { error: insertError } = await supabase.from("users").insert({
-        id: user.id,
-        email: formData.email,
-        username: formData.username,
-        department: formData.department.trim(), // stocké en string (ex: "69")
-      });
-
-      if (insertError) throw insertError;
-
-      router.push("/auth/signin");
+      // Fallback si la confirmation par email est (ré)activée côté Supabase.
+      setError("Vérifie ta boîte mail pour confirmer ton compte.");
     } catch (err: any) {
       setError(err.message ?? "An error occurred.");
     }

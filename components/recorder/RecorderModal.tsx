@@ -10,7 +10,6 @@ import {
   Save,
   Loader2,
   Wand2,
-  Crosshair,
   Timer,
   Headphones,
   Volume2,
@@ -102,39 +101,127 @@ const GENRE_OPTIONS = [
   "hip-hop",
 ];
 
-function FxSlider({
-  label,
-  value,
-  min,
-  max,
-  step,
+type EqBand = "low" | "mid" | "high";
+
+// Courbe lissée (Catmull-Rom -> cubiques) passant par les points.
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return "";
+  let d = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
+// Égaliseur en courbe : 3 points draggables (Low/Mid/High), ±12 dB.
+// Double-clic sur un point = reset à 0.
+function EqCurve({
+  low,
+  mid,
+  high,
   onChange,
-  format,
 }: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format: (v: number) => string;
+  low: number;
+  mid: number;
+  high: number;
+  onChange: (band: EqBand, value: number) => void;
 }) {
+  const W = 260;
+  const H = 120;
+  const pad = 16;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<EqBand | null>(null);
+
+  const xOf: Record<EqBand, number> = { low: W * 0.2, mid: W * 0.5, high: W * 0.8 };
+  const vals: Record<EqBand, number> = { low, mid, high };
+  const dbToY = (db: number) => H / 2 - (db / 12) * (H / 2 - pad);
+  const yToDb = (y: number) =>
+    Math.max(-12, Math.min(12, Math.round(((H / 2 - y) / (H / 2 - pad)) * 12)));
+
+  const pts = [
+    { x: 0, y: dbToY(low) },
+    { x: xOf.low, y: dbToY(low) },
+    { x: xOf.mid, y: dbToY(mid) },
+    { x: xOf.high, y: dbToY(high) },
+    { x: W, y: dbToY(high) },
+  ];
+  const line = smoothPath(pts);
+  const area = `${line} L ${W},${H} L 0,${H} Z`;
+
+  const moveTo = (clientY: number) => {
+    if (!dragRef.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const y = ((clientY - rect.top) / rect.height) * H;
+    onChange(dragRef.current, yToDb(y));
+  };
+
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-white/50">
-        <span>{label}</span>
-        <span className="font-mono text-yellow-200/80">{format(value)}</span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="h-1.5 w-full cursor-pointer accent-yellow-400"
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="h-full w-full touch-none"
+      onPointerMove={(e) => moveTo(e.clientY)}
+      onPointerUp={(e) => {
+        dragRef.current = null;
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {}
+      }}
+    >
+      <defs>
+        <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#facc15" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#facc15" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+
+      <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="rgba(255,255,255,0.12)" />
+      {(["low", "mid", "high"] as EqBand[]).map((b) => (
+        <line key={b} x1={xOf[b]} y1="0" x2={xOf[b]} y2={H} stroke="rgba(255,255,255,0.05)" />
+      ))}
+
+      <path d={area} fill="url(#eqGrad)" />
+      <path
+        d={line}
+        fill="none"
+        stroke="#facc15"
+        strokeWidth="2"
+        vectorEffect="non-scaling-stroke"
       />
-    </div>
+
+      {(["low", "mid", "high"] as EqBand[]).map((b) => (
+        <g key={b}>
+          <circle
+            cx={xOf[b]}
+            cy={dbToY(vals[b])}
+            r="9"
+            fill="transparent"
+            className="cursor-ns-resize"
+            onPointerDown={(e) => {
+              dragRef.current = b;
+              svgRef.current?.setPointerCapture(e.pointerId);
+            }}
+            onDoubleClick={() => onChange(b, 0)}
+          />
+          <circle
+            cx={xOf[b]}
+            cy={dbToY(vals[b])}
+            r="4.5"
+            fill="#ffffff"
+            className="pointer-events-none"
+          />
+        </g>
+      ))}
+    </svg>
   );
 }
 
@@ -167,12 +254,9 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   // traitement
   const [gain, setGainValue] = useState(1);
   const [doNormalize, setDoNormalize] = useState(true);
-  const [fadeIn, setFadeIn] = useState(0);
-  const [fadeOut, setFadeOut] = useState(0);
   const [eqLow, setEqLow] = useState(0);
   const [eqMid, setEqMid] = useState(0);
   const [eqHigh, setEqHigh] = useState(0);
-  const [reverb, setReverb] = useState(0);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -319,14 +403,10 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
       setTakeLaneBuffer(null);
       return;
     }
-    const buf = engineRef.current?.buildTakeBuffer({
-      normalize: doNormalize,
-      fadeIn,
-      fadeOut,
-    });
+    const buf = engineRef.current?.buildTakeBuffer({ normalize: doNormalize });
     setTakeLaneBuffer(buf ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, hasBlob, trimStart, trimEnd, doNormalize, fadeIn, fadeOut]);
+  }, [mode, hasBlob, trimStart, trimEnd, doNormalize]);
 
   // ── RECORD (count-in + parents calés sur le temps 1) ──
   const handleStartRecording = async () => {
@@ -371,12 +451,9 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
 
     const take = await engine.buildProcessedTake({
       normalize: doNormalize,
-      fadeIn,
-      fadeOut,
       eqLow,
       eqMid,
       eqHigh,
-      reverb,
     });
     if (!take) {
       toast.error("Rien à lire");
@@ -396,10 +473,6 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
   const handleGainChange = (v: number) => {
     setGainValue(v);
     audio.setOverdubGain(v); // feedback live pendant la preview
-  };
-
-  const handleResetAlign = () => {
-    engineRef.current?.resetHeadTrim();
   };
 
   const handleSave = async () => {
@@ -424,16 +497,13 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
         return;
       }
 
-      // traitement final : trim + gain + normalize + fades + EQ + reverb -> WAV
+      // traitement final : trim + gain + normalize + EQ -> WAV
       const take = await engine.buildProcessedTake({
         gain,
         normalize: doNormalize,
-        fadeIn,
-        fadeOut,
         eqLow,
         eqMid,
         eqHigh,
-        reverb,
       });
       if (!take || take.samples.length < 1024) {
         toast.error("Prise trop courte");
@@ -730,6 +800,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                 totalDuration={totalDur}
                 currentTime={playheadTime}
                 bpm={bpmVal}
+                onSeek={mode !== "recording" ? (r) => audio.seek(r) : undefined}
               />
             ) : (
               <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-white/10 bg-black/20 text-xs text-white/40">
@@ -737,79 +808,83 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
               </div>
             )}
 
-            {/* TRIM (secondaire, en édition) */}
-            <div className={mode === "editing" ? "space-y-1" : "hidden"}>
-              <span className="px-0.5 text-[10px] uppercase tracking-[0.15em] text-white/40">
-                Trim in / out
+          </div>
+
+          {/* TRAITEMENT — toujours monté (masqué hors édition pour garder la waveform) */}
+          <div
+            className={
+              mode === "editing"
+                ? "flex gap-4 rounded-xl border border-white/10 bg-black/20 p-3"
+                : "hidden"
+            }
+          >
+            {/* Colonne gauche : Trim, Gain, Normalize */}
+            <div className="flex flex-1 flex-col justify-between gap-2.5">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
+                  Trim
+                </span>
+                <div className="h-12 w-full overflow-hidden rounded-lg border border-white/10 bg-black/30 px-1">
+                  <div
+                    ref={waveformRef}
+                    className="h-full w-full"
+                    style={{ transform: "translateZ(0)" }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="w-9 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                  Gain
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.01}
+                  value={gain}
+                  onChange={(e) => handleGainChange(parseFloat(e.target.value))}
+                  onDoubleClick={() => handleGainChange(1)}
+                  className="h-1.5 flex-1 cursor-pointer accent-yellow-400"
+                />
+                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-yellow-200">
+                  {gain.toFixed(2)}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setDoNormalize((v) => !v)}
+                className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
+                  doNormalize
+                    ? "bg-yellow-400 text-black"
+                    : "bg-white/10 text-white/70 hover:bg-white/15"
+                }`}
+              >
+                <Wand2 size={13} /> Normalize
+              </button>
+            </div>
+
+            {/* Colonne droite : égaliseur en courbe */}
+            <div className="flex w-[46%] shrink-0 flex-col">
+              <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
+                Égaliseur
               </span>
-              <div className="h-16 w-full overflow-hidden rounded-xl border border-white/10 bg-black/30 px-1">
-                <div
-                  ref={waveformRef}
-                  className="h-full w-full"
-                  style={{ transform: "translateZ(0)" }}
+              <div className="mt-1 flex-1 overflow-hidden rounded-lg border border-white/10 bg-black/30">
+                <EqCurve
+                  low={eqLow}
+                  mid={eqMid}
+                  high={eqHigh}
+                  onChange={(band, v) =>
+                    band === "low"
+                      ? setEqLow(v)
+                      : band === "mid"
+                      ? setEqMid(v)
+                      : setEqHigh(v)
+                  }
                 />
               </div>
             </div>
           </div>
-
-          {/* TRAITEMENT (édition) : gain, normalize, fades, EQ, reverb */}
-          {mode === "editing" && (
-            <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex flex-1 items-center gap-3">
-                  <span className="w-9 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                    Gain
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={2}
-                    step={0.01}
-                    value={gain}
-                    onChange={(e) => handleGainChange(parseFloat(e.target.value))}
-                    className="h-1.5 flex-1 cursor-pointer accent-yellow-400"
-                  />
-                  <span className="w-10 text-right font-mono text-[11px] text-yellow-200">
-                    {gain.toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setDoNormalize((v) => !v)}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
-                      doNormalize
-                        ? "bg-yellow-400 text-black"
-                        : "bg-white/10 text-white/70 hover:bg-white/15"
-                    }`}
-                  >
-                    <Wand2 size={13} /> Normalize
-                  </button>
-                  <button
-                    onClick={handleResetAlign}
-                    title="Recaler le début sur le temps 1"
-                    className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/15 hover:text-white"
-                  >
-                    <Crosshair size={13} /> Align
-                  </button>
-                </div>
-              </div>
-
-              <div className="h-px bg-white/10" />
-
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-                <FxSlider label="Fade in" value={fadeIn} min={0} max={2} step={0.05} onChange={setFadeIn} format={(v) => `${v.toFixed(2)}s`} />
-                <FxSlider label="Fade out" value={fadeOut} min={0} max={2} step={0.05} onChange={setFadeOut} format={(v) => `${v.toFixed(2)}s`} />
-                <FxSlider label="Reverb" value={reverb} min={0} max={0.8} step={0.02} onChange={setReverb} format={(v) => `${Math.round((v / 0.8) * 100)}%`} />
-              </div>
-
-              <div className="grid grid-cols-3 gap-x-4 gap-y-3">
-                <FxSlider label="EQ Low" value={eqLow} min={-12} max={12} step={1} onChange={setEqLow} format={(v) => `${v > 0 ? "+" : ""}${v} dB`} />
-                <FxSlider label="EQ Mid" value={eqMid} min={-12} max={12} step={1} onChange={setEqMid} format={(v) => `${v > 0 ? "+" : ""}${v} dB`} />
-                <FxSlider label="EQ High" value={eqHigh} min={-12} max={12} step={1} onChange={setEqHigh} format={(v) => `${v > 0 ? "+" : ""}${v} dB`} />
-              </div>
-            </div>
-          )}
 
           {/* TRANSPORT + SAVE */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -819,7 +894,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                   onClick={handleStartRecording}
                   className="flex flex-1 items-center justify-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-900/30 transition hover:bg-red-500 sm:flex-none"
                 >
-                  <Mic size={16} /> {mode === "editing" ? "Re-record" : "Record"}
+                  <Mic size={16} /> {mode === "editing" ? "Re Record" : "Record"}
                 </button>
               )}
 
@@ -837,7 +912,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
                   onClick={handlePlay}
                   className="flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15"
                 >
-                  <Play size={16} className="text-yellow-300" /> Play mix
+                  <Play size={16} className="text-yellow-300" /> Play
                 </button>
               )}
               {mode === "editing" && hasBlob && isPreviewing && (
@@ -867,7 +942,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
               ) : (
                 <Save size={16} />
               )}
-              Save Track
+              Publish
             </button>
           </div>
         </div>

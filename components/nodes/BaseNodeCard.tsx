@@ -53,7 +53,9 @@ export function BaseNodeCard({
         "group relative block overflow-hidden rounded-2xl border border-white/10 shadow-lg transition-all",
         colorClass,
         href &&
-          "cursor-pointer hover:-translate-y-0.5 hover:shadow-xl hover:ring-1 hover:ring-white/20"
+          "cursor-pointer hover:-translate-y-0.5 hover:shadow-xl hover:ring-1 hover:ring-white/20",
+        isPlaying &&
+          "ring-2 ring-yellow-400 shadow-[0_0_22px_rgba(250,204,21,0.55)]"
       )}
     >
       <div className="pointer-events-none absolute inset-0 z-0">

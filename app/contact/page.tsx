@@ -14,15 +14,11 @@ export default function ContactPage() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Contact
         </h1>
-        <p className="max-w-3xl text-sm text-neutral-300 sm:text-base">
-          Une question, une idée de collaboration, un retour sur la plateforme
-          ou envie de tester ForkJam avec votre groupe ?
-        </p>
         <p className="text-sm text-neutral-300 sm:text-base">
-          Vous pouvez me contacter directement à l’adresse suivante :
+          Vous pouvez me contacter ici :
         </p>
         <p className="text-sm font-mono text-yellow-300 sm:text-base">
-          n.naveau@icloud.com
+          n.naveau@icloud.com - 06.01.82.60.94
         </p>
       </section>
     </main>

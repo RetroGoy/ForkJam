@@ -26,6 +26,7 @@ interface RecorderTracksProps {
   currentTime: number;
   bpm: number;
   beatsPerBar?: number;
+  onSeek?: (ratio: number) => void;
 }
 
 const TAKE_COLOR = "#fde047"; // yellow-300
@@ -88,6 +89,7 @@ export function RecorderTracks({
   currentTime,
   bpm,
   beatsPerBar = 4,
+  onSeek,
 }: RecorderTracksProps) {
   const total = Math.max(totalDuration, 0.001);
   const playRatio = Math.min(Math.max(currentTime / total, 0), 1);
@@ -97,8 +99,39 @@ export function RecorderTracks({
 
   const takeColor = getWaveColorForInstrument(takeInstr);
 
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const seekAt = (clientX: number) => {
+    const el = trackRef.current;
+    if (!el || !onSeek) return;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    onSeek(ratio);
+  };
+
   return (
-    <div className="relative rounded-xl border border-white/10 bg-black/30 p-2.5">
+    <div
+      ref={trackRef}
+      onPointerDown={(e) => {
+        if (!onSeek) return;
+        draggingRef.current = true;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        seekAt(e.clientX);
+      }}
+      onPointerMove={(e) => {
+        if (draggingRef.current) seekAt(e.clientX);
+      }}
+      onPointerUp={(e) => {
+        draggingRef.current = false;
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {}
+      }}
+      className={`relative rounded-xl border border-white/10 bg-black/30 p-2.5 ${
+        onSeek ? "cursor-pointer select-none" : ""
+      }`}
+    >
       {/* grille de mesures */}
       {barPct > 0.5 && (
         <div
@@ -115,7 +148,11 @@ export function RecorderTracks({
       <div
         className="pointer-events-none absolute top-1 bottom-1 z-20 w-[2px] bg-yellow-300/90 shadow-[0_0_6px_rgba(253,224,71,0.8)]"
         style={{ left: `${playRatio * 100}%` }}
-      />
+      >
+        {onSeek && (
+          <div className="absolute -top-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-yellow-300 shadow" />
+        )}
+      </div>
 
       <div className="relative z-10 space-y-1.5">
         {/* PISTES PARENTES */}

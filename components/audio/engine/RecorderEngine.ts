@@ -30,20 +30,16 @@ import {
   applyGain,
   normalize,
   hardClip,
-  applyFades,
 } from "@/lib/audio/process";
-import { renderEffects } from "@/lib/audio/render";
+import { renderEq } from "@/lib/audio/render";
 import { encodeWavMono } from "@/lib/audio/wav";
 
 export type TakeFx = {
   gain?: number;
   normalize?: boolean;
-  fadeIn?: number;
-  fadeOut?: number;
   eqLow?: number;
   eqMid?: number;
   eqHigh?: number;
-  reverb?: number;
 };
 
 export type RecorderEvent =
@@ -411,11 +407,10 @@ export class RecorderEngine {
     const mono = sliceMono(this.alignedSamples, sr, this.trimStart, this.trimEnd);
     applyGain(mono, opts.gain ?? 1);
     if (opts.normalize) normalize(mono);
-    applyFades(mono, sr, opts.fadeIn ?? 0, opts.fadeOut ?? 0);
     return mono;
   }
 
-  // Version rapide (sans EQ/reverb) pour l'affichage de la lane.
+  // Version rapide (sans EQ) pour l'affichage de la lane.
   buildTakeBuffer(opts: TakeFx): AudioBuffer | null {
     const mono = this.buildTakeSamples(opts);
     if (!mono) return null;
@@ -425,17 +420,16 @@ export class RecorderEngine {
     return buffer;
   }
 
-  // Version complète (EQ + reverb) pour la lecture et la sauvegarde.
+  // Version complète (EQ) pour la lecture et la sauvegarde.
   async buildProcessedTake(opts: TakeFx): Promise<ProcessedTake | null> {
     let mono = this.buildTakeSamples(opts);
     if (!mono) return null;
     const sr = this.alignedSR;
 
-    mono = await renderEffects(mono, sr, {
+    mono = await renderEq(mono, sr, {
       low: opts.eqLow ?? 0,
       mid: opts.eqMid ?? 0,
       high: opts.eqHigh ?? 0,
-      reverb: opts.reverb ?? 0,
     });
     hardClip(mono);
 

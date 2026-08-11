@@ -160,13 +160,19 @@ export function NodeGraph({
 
     rootNodes.forEach((root) => layout(root.id, 0));
 
-    const edge = (source: string, target: string): RFEdge => ({
+    const branchIds = new Set(branch.map((b) => b.id));
+    const edge = (
+      source: string,
+      target: string,
+      highlighted = false
+    ): RFEdge => ({
       id: `${source}-${target}`,
       source,
       target,
       type: "smoothstep",
       pathOptions: { borderRadius: EDGE_RADIUS },
-      style: EDGE_STYLE,
+      animated: highlighted,
+      style: highlighted ? { stroke: "#fde047", strokeWidth: 4.5 } : EDGE_STYLE,
     });
 
     for (const node of nodes) {
@@ -215,7 +221,15 @@ export function NodeGraph({
     }
 
     byParent.forEach((children, parentId) => {
-      children.forEach((child) => graphEdges.push(edge(parentId, child.id)));
+      children.forEach((child) =>
+        graphEdges.push(
+          edge(
+            parentId,
+            child.id,
+            transportPlaying && branchIds.has(parentId) && branchIds.has(child.id)
+          )
+        )
+      );
     });
 
     return { graphNodes, graphEdges };

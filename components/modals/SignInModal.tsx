@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { supabase } from "@/lib/supabase/supabase";
 import { Loader2, Mail, Lock } from "lucide-react";
 import { useGlobalModal } from "./GlobalModal";
-import Link from "next/link";
 import { SSOButtons } from "./SSOButtons";
 
 export function SignInModal() {
@@ -12,17 +11,11 @@ export function SignInModal() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accepted) {
-      setError("You must accept the Terms of Service.");
-      return;
-    }
-
     setError("");
     setLoading(true);
 
@@ -80,22 +73,6 @@ export function SignInModal() {
                 className="w-full pl-10 pr-3 py-2 bg-gray-800/80 border border-gray-700 text-sm focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-none"
               />
             </div>
-          </div>
-
-          {/* CGU */}
-          <div className="flex items-center gap-2 text-xs text-gray-300 mt-2">
-            <input
-              type="checkbox"
-              checked={accepted}
-              onChange={(e) => setAccepted(e.target.checked)}
-              className="accent-yellow-500"
-            />
-            <span>
-              I accept the{" "}
-              <Link href="/legal" className="text-yellow-400 underline">
-                Terms of Service
-              </Link>.
-            </span>
           </div>
 
           {error && (

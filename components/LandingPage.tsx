@@ -55,11 +55,11 @@ function ParallaxImage() {
   return (
     <div
       ref={wrapRef}
-      className="relative -mt-12 w-full overflow-hidden"
+      className="relative -mt-4 mb-6 w-full overflow-hidden"
     >
       <img
         ref={imgRef}
-        src="/images/parallax.png"
+        src="/images/parallaxe.png"
         alt="ForkJam — graphe musical"
         className="block w-[110%] max-w-none will-change-transform"
       />

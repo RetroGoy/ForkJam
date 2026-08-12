@@ -16,12 +16,17 @@ export function AppHeader() {
   const pathname = usePathname();
 
   const hideSearch = pathname === "/feed" || UUID_RE.test(pathname);
+  const isExplore = pathname === "/explore";
 
   return (
-    <header className="flex h-14 items-center gap-3 bg-background/60 px-4 backdrop-blur">
+    <header className="relative flex h-14 items-center gap-3 bg-background/60 px-4 backdrop-blur">
       {hideSearch ? (
         <>
-          <Link href="/feed" className="flex items-center gap-2">
+          {/* < md : titre centré horizontalement (absolu) ; ≥ md : aligné à gauche */}
+          <Link
+            href="/feed"
+            className="flex items-center gap-2 max-md:absolute max-md:left-1/2 max-md:-translate-x-1/2"
+          >
             <Image
               src="/logoFj.png"
               alt="ForkJam"
@@ -41,12 +46,15 @@ export function AppHeader() {
         </div>
       )}
 
-      <button
-        onClick={() => router.push("/explore")}
-        className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted hover:bg-muted/80"
-      >
-        <ArrowRight size={20} />
-      </button>
+      {/* flèche uniquement sur la page Explore */}
+      {isExplore && (
+        <button
+          onClick={() => router.push("/explore")}
+          className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted hover:bg-muted/80"
+        >
+          <ArrowRight size={20} />
+        </button>
+      )}
     </header>
   );
 }

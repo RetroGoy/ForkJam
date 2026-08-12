@@ -56,7 +56,8 @@ export function NodeCard({
       onDownvote={onDownvote}
       href={clickable ? `/${node.id}` : undefined}
     >
-      <div className="flex items-start justify-between gap-2 pr-10">
+      {/* < 500px : titre et date empilés (titre pas écrasé) ; ≥ 500px : sur une ligne */}
+      <div className="flex flex-col gap-2 pr-10 min-[500px]:flex-row min-[500px]:items-start min-[500px]:justify-between">
         <h3 className="line-clamp-2 text-sm font-extrabold uppercase leading-tight text-white sm:text-base">
           {node.title}
         </h3>

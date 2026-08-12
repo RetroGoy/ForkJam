@@ -84,7 +84,7 @@ export function FeedPage() {
     );
 
   return (
-    <div className="mx-auto space-y-10 px-10 py-6">
+    <div className="mx-auto space-y-10 px-10 pt-6 pb-24 md:pb-6">
       {/* HEADER */}
       <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <div className="flex items-center gap-4">

@@ -18,7 +18,7 @@ export function ExplorePage() {
   }
 
   return (
-    <div className="px-4 py-4 max-w-4xl mx-auto">
+    <div className="px-4 pt-4 pb-24 md:pb-4 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Explore</h1>
 
       {sorted.length > 0 ? (

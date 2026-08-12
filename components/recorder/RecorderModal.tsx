@@ -657,7 +657,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
         </div>
 
         {/* BODY */}
-        <div className="max-h-[80vh] space-y-4 overflow-y-auto p-5">
+        <div className="max-h-[80vh] space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-5">
           {/* META : titre + instrument + genre */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
@@ -701,7 +701,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
           </div>
 
           {/* TOOLBAR : entrée + temps */}
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
             <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-white/60">
               <Mic size={13} className="shrink-0 text-white/50" />
               <select
@@ -818,7 +818,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
           <div
             className={
               mode === "editing"
-                ? "flex gap-4 rounded-xl border border-white/10 bg-black/20 p-3"
+                ? "flex flex-col gap-4 rounded-xl border border-white/10 bg-black/20 p-3 sm:flex-row"
                 : "hidden"
             }
           >
@@ -869,7 +869,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
             </div>
 
             {/* Colonne droite : égaliseur en courbe */}
-            <div className="flex w-[46%] shrink-0 flex-col">
+            <div className="flex w-full flex-col sm:w-[46%] sm:shrink-0">
               <span className="text-[10px] uppercase tracking-[0.15em] text-white/40">
                 Égaliseur
               </span>

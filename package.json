@@ -18,6 +18,7 @@
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
     "@capacitor/ios": "^7.6.8",
+    "@capacitor/splash-screen": "^7.0.5",
     "@ffmpeg/ffmpeg": "^0.11.6",
     "@radix-ui/react-slot": "^1.2.0",
     "@sentry/nextjs": "^10.29.0",

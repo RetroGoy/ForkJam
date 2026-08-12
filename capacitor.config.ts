@@ -36,8 +36,13 @@ const config: CapacitorConfig = {
   },
 
   plugins: {
+    // Écran de lancement : logo ForkJam sur charbon pendant le chargement
+    // de la webview (au lieu d'un écran noir).
     SplashScreen: {
-      launchShowDuration: 0,
+      launchShowDuration: 2500,
+      launchAutoHide: true,
+      backgroundColor: "#121417",
+      showSpinner: false,
     },
   },
 };

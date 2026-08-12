@@ -12,6 +12,8 @@ import {
 } from "@/lib/supabase/supabase";
 import { NodeCard } from "@/components/nodes/NodeCard";
 import { useAudioEngine } from "@/components/audio/hooks/useAudioEngine";
+import { Capacitor } from "@capacitor/core";
+import { useGlobalModal } from "@/components/modals/GlobalModal";
 
 function ParallaxImage() {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,10 @@ export function LandingPage() {
   const [topics, setTopics] = useState<Node[]>([]);
   const [topicScores, setTopicScores] = useState<Record<string, number>>({});
   const [user, setUser] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const { open, type: modalType } = useGlobalModal();
+  const isNative = mounted && Capacitor.isNativePlatform();
 
     const audio = useAudioEngine();
   function handleToggle(node: Node) {
@@ -81,20 +87,33 @@ export function LandingPage() {
     });
   }
 
-  // Vérifier si user connecté → rediriger vers /feed
+  useEffect(() => setMounted(true), []);
+
+  // Session courante + écoute des changements (connexion via la modale → /feed)
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-    };
-    checkUser();
+      setChecked(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user && typeof window !== "undefined") {
+        window.location.href = "/feed";
+      }
+    });
+    return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Connecté → feed. Sur natif iOS on ne montre jamais la landing :
+  // non connecté → on ouvre directement la modale de connexion.
   useEffect(() => {
-    if (user && typeof window !== "undefined") {
+    if (!mounted || !checked) return;
+    if (user) {
       window.location.href = "/feed";
+      return;
     }
-  }, [user]);
+    // natif : la modale de connexion reste toujours présente (réouverte si fermée)
+    if (isNative && modalType === null) open("signin");
+  }, [mounted, checked, user, isNative, modalType, open]);
 
   // Charger quelques topics pour la preview
   useEffect(() => {
@@ -105,8 +124,10 @@ export function LandingPage() {
     })();
   }, []);
 
-  // Si user connecté, on ne rend rien (redirection gérée plus haut)
-  if (user) return null;
+  // Avant de connaître plateforme + session : écran charbon (évite tout flash de landing sur natif)
+  if (!mounted || !checked) return <div className="min-h-dvh bg-background" />;
+  // Connecté (redirection en cours) ou natif (la modale de connexion s'affiche par-dessus)
+  if (user || isNative) return <div className="min-h-dvh bg-background" />;
 
   return (
       <>

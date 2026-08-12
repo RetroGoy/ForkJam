@@ -597,7 +597,7 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl">
+      <div className="relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl">
         {/* COUNT-IN OVERLAY */}
         {countingIn && (
           <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm">
@@ -656,8 +656,8 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
           </div>
         </div>
 
-        {/* BODY */}
-        <div className="max-h-[80vh] space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-5">
+        {/* BODY (défilable) */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-5">
           {/* META : titre + instrument + genre */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
@@ -890,7 +890,10 @@ export const RecorderModal: React.FC<RecorderModalProps> = ({
             </div>
           </div>
 
-          {/* TRANSPORT + SAVE */}
+        </div>
+
+        {/* TRANSPORT + SAVE — footer épinglé (toujours visible, pas besoin de scroller) */}
+        <div className="shrink-0 border-t border-white/10 bg-card p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               {mode !== "recording" && (
